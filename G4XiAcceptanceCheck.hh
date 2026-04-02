@@ -2,6 +2,7 @@
 #include "TGraphErrors.h"
 #include <vector>
 double weight_th = 50;
+TString trig = "";
 vector<TString> CheckLists = {
     "Gen"
 };
@@ -32,6 +33,30 @@ map<TString, int> colorMap = {
     {"GoodLAndPi2Tracked", kMagenta},
     {"GoodXi", kCyan+2}
 };
+void InitializeTriggerCondtions(){
+#if TrigB
+    cout<<"Applying trigger bias correction..."<<endl;
+    for(int ic=0;ic<CheckLists.size();++ic){
+        CheckLists[ic] = CheckLists[ic] + "TrigB";
+    }
+    cout<<"Updated CheckLists: "<<endl;
+    for(auto c:CorrPars){
+        c.num = c.num + "TrigB"; 
+        c.den = c.den + "TrigB";
+    }
+    cout<<"Updated CorrectionConf: "<<endl;
+    map<TString, int> colorMap_temp;
+    for(auto c: colorMap){
+        TString key = c.first + "TrigB";
+        colorMap_temp[key] = colorMap[c.first];
+    }
+    for(auto c: colorMap_temp){
+        colorMap[c.first] = c.second;
+    }
+    trig = "TrigB";
+    cout<<"Updated colorMap: "<<endl;
+#endif
+}
 void InitializeCorrectionHistograms(TString tgt){
     for(auto cp:CorrPars){
         TString num = cp.num;
@@ -79,12 +104,12 @@ void InitializeCorrectionHistograms(TString tgt){
     for(auto p:particle){
         for(int iv=0;iv<variable.size();++iv){
             auto v = variable[iv];
-            TString key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt");
+            TString key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt"+trig);
             Xtitle = SetAxis(p, v, nbinx, minx, maxx);
             hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-            key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor");
+            key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor"+trig);
             hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-            key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor");
+            key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor"+trig);
             hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
         }
     }
@@ -118,6 +143,9 @@ class Event{
         }
         bool Good(){
             if(Xi.Mag() <1e-5) return false;
+            #if TrigB
+            if(gf->nhHtof < 2) return false;
+            #endif
             return true;
         }
         double GetWeight(TString part, TString num, TString den, TString v1, TString v2 = ""){
@@ -173,6 +201,7 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
             auto v = variable[iv];
             for(auto chk: CheckLists){
                 if(!SuffixCheck(chk, gf)) continue;
+                if(!TrigCheck(trig, gf)) continue;
                 key = AcceptanceHistTitle1D(tgt, p, v, chk);
                 hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1], DC[p][2], v));
         for(auto cp:CorrPars){
@@ -201,13 +230,13 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
         }
             }
             if(SuffixCheck("XiAcpt", gf)){
-                key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt");
+                key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt" + trig);
                 hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v));
-                key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor");
+                key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor" + trig);
                 hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v), weight);
             }
             if(SuffixCheck("GoodXi", gf)){
-                key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor");
+                key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor" + trig);
                 hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v), weight);
             }
         }
@@ -219,17 +248,17 @@ void NormalizeHistograms(TString tgt){
         for(int iv=0;iv<variable.size();++iv){
             double maxi = 0;
             auto v = variable[iv];
-            key = AcceptanceHistTitle1D(tgt, p, v, "Gen");
+            key = AcceptanceHistTitle1D(tgt, p, v, "Gen" + trig);
             maxi = hMap[key]->GetMaximum();
-            key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt");
+            key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt"+trig);
             hMap[key]->Scale(1./maxi);
             hMap[key]->SetLineColor(kBlue);
-            key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor");
+            key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor"+trig);
             hMap[key]->Scale(1./maxi);
             hMap[key]->SetLineColor(kRed);
             hMap[key]->SetMarkerColor(kRed);
             hMap[key]->SetMarkerStyle(20);
-            key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor");
+            key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor"+trig);
             hMap[key]->Scale(1./maxi);
             hMap[key]->SetLineColor(kGreen+2);
             hMap[key]->SetMarkerColor(kGreen+2);
@@ -296,7 +325,8 @@ double CalcChi2(TH1* Gen, TH1* Cor, double trun = 0.2){
         double cor = Cor->GetBinContent(i);
         double cor_err = Cor->GetBinError(i);
         double err = hypot(gen_err, cor_err);
-        dels.push_back(gen - cor);
+        dels.push_back((gen - cor));
+        //dels.push_back((gen - cor)/err);
     }
     std::sort(dels.begin(), dels.end());
     int n = dels.size();

@@ -8,7 +8,7 @@ void G4XiAcceptance(int conf=0){
   gStyle -> SetOptStat(0);
 //  double pxi = -0.3;
   double pxi = 0;
-  int nfiles = 10;
+  int nfiles = 30;
 	TString WAcc,Target,Conf;
   WAcc = "_WB";
 #if CH2
@@ -23,7 +23,7 @@ void G4XiAcceptance(int conf=0){
   //file_dir += "WeightedFermi/";
   file_dir += "W_Acc/";
   //file_dir += "W_Acc_Rot/";
-	int date = 60327;
+	int date = 260402;
   TString filename, figdir;
   TChain* tree = new TChain("tpc");
 //	filename = Form("%d_KpXiMM%s%s_P_%g_%d_GenfitCarbonGeant4Ver4.root",date,Conf.Data(),WAcc.Data(),pxi,0);
@@ -51,9 +51,9 @@ void G4XiAcceptance(int conf=0){
   TFile* fileOut;
   TString fout_dir = "./Maps/";
 #if Recon
-	figdir = Form("./figs/AcceptanceHists/ReconPol_%g_%s%s/", pxi,Target.Data(),WAcc.Data());
+	figdir = Form("./figs_%d/AcceptanceHists/ReconPol_%s%s/", date,Target.Data(),WAcc.Data());
 #else
-  figdir = Form("./figs/AcceptanceHists/MissPol_%g_%s%s/", pxi,Target.Data(),WAcc.Data());
+  figdir = Form("./figs_%d/AcceptanceHists/MissPol_%s%s/", date,Target.Data(),WAcc.Data());
 #endif
   TString fout_name = Form("%s_MM_%s_%d.root",Target.Data() ,WAcc.Data(),date);
 #if Recon

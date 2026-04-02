@@ -1,4 +1,5 @@
 #define PerDist 1
+#define TrigB 1
 #include "G4XiAcceptanceCheck.hh"
 #define Recon 1
 #define CH2 1
@@ -8,8 +9,8 @@ void G4XiAcceptanceCheck(){
   double pxi = 0;
 	TString WAcc,Target,Conf;
   WAcc = "_WB";
-  int nfile = 10;
-  bool test_run = 0;
+  int nfile = 30;
+  bool test_run = 1;
   if(test_run) nfile = 1;
 #if CH2
   TString file_dir = "./rootfiles/Geant4CH2/";
@@ -22,7 +23,7 @@ void G4XiAcceptanceCheck(){
 #endif
   //file_dir += "WeightedFermi/";
   file_dir += "W_Acc/";
-	int date = 260304;
+	int date = 260402;
   TString filename, figdir;
   TString tgt = "Carbon";
 #if CH2
@@ -30,12 +31,6 @@ void G4XiAcceptanceCheck(){
 #endif
   TChain* tree = new TChain("tpc");
 	cout<<"Loading files..."<<endl;
-	for(int j=0;j<3;++j){
-		if(j==0) pxi=-1;
-		if(j==1) pxi=0;
-		if(j==2) pxi=1;
-		if(j!=1) continue;
-//    if(test_run and (pxi == -1 or pxi == 1)) continue;
 	for(int i=0;i<nfile;++i){
 #if CH2
 		filename = Form("XiReconCH2_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
@@ -45,20 +40,20 @@ void G4XiAcceptanceCheck(){
 		cout<<"Loading "<<filename<<endl;
 		tree -> Add(file_dir+filename);
 	}
-	}
 	cout<<"Accpt file"<<endl;
 #if CH2
-  TFile* acpt_file = TFile::Open("./Maps/CH2_ReconPE42__WB_260304.root");
+  TFile* acpt_file = TFile::Open("./Maps/CH2_ReconPE42__WB_260327.root");
 #else
-  TFile* acpt_file = TFile::Open("./Maps/Carbon_ReconPE42__WB_260227.root");
+  TFile* acpt_file = TFile::Open("./Maps/Carbon_ReconPE42__WB_260327.root");
 #endif
+  InitializeTriggerCondtions();
   g4genfitcarbon* Xi = new g4genfitcarbon(tree);
   SetBranches(tree);
 	InitializeCorrectionHistograms( tgt );
   LoadEfficiencies(acpt_file, tgt);
   int ent = tree->GetEntries();
 	cout<<"Entries : "<<ent<<endl;
-//  if(test_run) ent = ent / 10;
+  if(test_run) ent = ent / 10;
   for(int i = 0;i<ent;i++){
     if(i%1000==0) cout << i << endl;
     Xi->GetEntry(i);
@@ -66,7 +61,10 @@ void G4XiAcceptanceCheck(){
   }
   MakeChi2Map(tgt);
   NormalizeHistograms(tgt);
-  TString figdir_base = Form("figs/%s/", tgt.Data());
+  TString figdir_base = Form("figs_%d/%s/", date,tgt.Data());
+	if(TrigB){
+		figdir_base.ReplaceAll("figs","figs_TrigB");
+	}
 	if(test_run) figdir_base.ReplaceAll(tgt,tgt + "_testrun");
   figdir_base.ReplaceAll(tgt,tgt+ "ForcedPi2Ph");
   gSystem->mkdir(figdir_base, true);
@@ -85,16 +83,16 @@ void G4XiAcceptanceCheck(){
     for(int iv = 0; iv < variable.size();++iv){
       auto v1 = variable[iv];
       c->cd(iv+1);
-      TString key = AcceptanceHistTitle1D(tgt, p, v1, "Gen");
+      TString key = AcceptanceHistTitle1D(tgt, p, v1, "Gen"+trig);
       TH1* h_gen = (TH1*)hMap[key]->Clone();
       h_gen->GetYaxis()->SetRangeUser(0,h_gen->GetMaximum()*1.5);
       h_gen->Draw("hist");
       TLegend* leg = new TLegend(0.6,0.7,0.9,0.9);
       leg->SetFillStyle(0);
       leg->SetBorderSize(0);
-      leg->AddEntry(h_gen, "Gen", "l");
+      leg->AddEntry(h_gen, "Gen" + trig, "l");
       for(auto chk: CheckLists){
-        if(chk == "Gen") continue;
+        if(chk == "Gen" + trig) continue;
         key = AcceptanceHistTitle1D(tgt, p, v1, chk);
         auto gr = MakeDivisionGraph(hMap[key], h_gen);
         gr->Draw("PE same");
@@ -112,26 +110,26 @@ void G4XiAcceptanceCheck(){
     for(int iv = 0; iv < variable.size();++iv){
       auto v1 = variable[iv];
       c_corr->cd(iv+1);
-      TString key = AcceptanceHistTitle1D(tgt, p, v1, "Gen");
+      TString key = AcceptanceHistTitle1D(tgt, p, v1, "Gen" + trig);
       TH1* h_gen = (TH1*)hMap[key]->Clone();
       h_gen->GetYaxis()->SetRangeUser(0, h_gen->GetMaximum()*1.5);
       h_gen->Draw("hist");
       TLegend* leg = new TLegend(0.6,0.7,0.9,0.9);
       leg->SetFillStyle(0);
       leg->SetBorderSize(0);
-      leg->AddEntry(h_gen, "Gen", "l");
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcpt");
+      leg->AddEntry(h_gen, "Gen" + trig, "l");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcpt"+trig);
       auto h_xiacpt = (TH1*)hMap[key]->Clone();
       h_xiacpt ->Draw("hist same");
-      key = AcceptanceHistTitle1D(tgt, p, v1, "GoodXiCor");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "GoodXiCor"+trig);
       auto h_goodxicor = (TH1*)hMap[key]->Clone();
       //h_goodxicor->Draw("pe same");
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcptCor");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcptCor"+trig);
       auto h_xiacptcor = (TH1*)hMap[key]->Clone();
       h_xiacptcor->Draw("pe same"); 
-      leg->AddEntry(h_xiacpt, "XiAcpt", "l");
+      leg->AddEntry(h_xiacpt, "XiAcpt"+trig, "l");
       //leg->AddEntry(h_goodxicor, "GoodXiCor", "pe");
-      leg->AddEntry(h_xiacptcor, "XiAcptCor", "pe");
+      leg->AddEntry(h_xiacptcor, "XiAcptCor"+trig, "pe");
       leg->Draw();
     }
     c_corr->SaveAs(figdir_rec + ct + ".pdf");

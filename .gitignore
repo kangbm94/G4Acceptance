@@ -1,2 +1,5 @@
 leg
 .DS_Store
+figs*
+Maps*
+rootfiles*
