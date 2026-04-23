@@ -1,7 +1,6 @@
 #include "Include/g4genfitcarbon.h"
 #include "Include/XiEfficiency.hh"
 using namespace std;
-
 //#include "G4PolaBranches.hh"
 double thr_weight = 20; // cut under 5%
 
@@ -40,17 +39,17 @@ double GFltarget_ycut = 20.;
 
 bool SuffixCheck(TString suff, g4genfitcarbon* XiEv){
   bool ret = false;
-  if(suff == "Gen") ret = 1;
-  if(suff == "LAcpt") ret = (XiEv->lgood or XiEv->Xiflag);
-  if(suff == "GoodL") ret = XiEv->lgood;
-  if(suff == "XiAcpt") ret = XiEv->Xiflag;
-  if(suff == "GoodXi") ret = XiEv->xigood;
-  if(suff == "PTracked") ret = XiEv->p_tracked;
-  if(suff == "Pi1Tracked") ret = XiEv->pi1_tracked;
-  if(suff == "Pi2Tracked") ret = XiEv->pi2_tracked;
-  if(suff == "PPi1Tracked") ret = (XiEv->p_tracked and XiEv->pi1_tracked);
-  if(suff == "AllTracked") ret = (XiEv->p_tracked and XiEv->pi1_tracked and XiEv->pi2_tracked);
-  if(suff == "GoodLAndPi2Tracked") ret = (XiEv->lgood and XiEv->pi2_tracked);
+  if(suff.Contains("Gen")) ret = 1;
+  if(suff.Contains("LAcpt")) ret = (XiEv->lgood or XiEv->Xiflag);
+  if(suff.Contains("GoodL")) ret = XiEv->lgood;
+  if(suff.Contains("XiAcpt")) ret = XiEv->Xiflag;
+  if(suff.Contains("GoodXi")) ret = XiEv->xigood;
+  if(suff.Contains("PTracked")) ret = XiEv->p_tracked;
+  if(suff.Contains("Pi1Tracked")) ret = XiEv->pi1_tracked;
+  if(suff.Contains("Pi2Tracked")) ret = XiEv->pi2_tracked;
+  if(suff.Contains("PPi1Tracked")) ret = (XiEv->p_tracked and XiEv->pi1_tracked);
+  if(suff.Contains("AllTracked")) ret = (XiEv->p_tracked and XiEv->pi1_tracked and XiEv->pi2_tracked);
+  if(suff.Contains("GoodLAndPi2Tracked")) ret = (XiEv->lgood and XiEv->pi2_tracked);
   
   return ret;
 }
@@ -255,12 +254,17 @@ void MakeEfficiencies(){
       {"GoodL", "PPi1Tracked"},
       {"GoodXi", "AllTracked"}
     };
+		if(date == 260422){
+			EffConfs = {
+				{"GoodL","Gen"},
+				{"GoodXi","GoodL"}
+			};
+		}
     for(auto t:triggers){
       for(auto& [num, den]:EffConfs){
         MakeEff(num+t, den+t);
       }
-    }   
-}
+    }   }
 
 void
 SetBranches(TTree* tree){

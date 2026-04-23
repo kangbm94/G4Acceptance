@@ -1,5 +1,6 @@
 #define LooseBin 0
 #define Debug 0
+#define date 260422
 #include "G4XiAcceptance.hh"
 #define Recon 1
 #define CH2 1
@@ -23,7 +24,8 @@ void G4XiAcceptance(int conf=0){
   //file_dir += "WeightedFermi/";
   file_dir += "W_Acc/";
   //file_dir += "W_Acc_Rot/";
-	int date = 260402;
+	//date = 260402;
+	//date = 260422;//Only pi acceptance
   TString filename, figdir;
   TChain* tree = new TChain("tpc");
 //	filename = Form("%d_KpXiMM%s%s_P_%g_%d_GenfitCarbonGeant4Ver4.root",date,Conf.Data(),WAcc.Data(),pxi,0);

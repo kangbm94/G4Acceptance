@@ -1,8 +1,9 @@
 #define PerDist 1
-#define TrigB 1
-#include "G4XiAcceptanceCheck.hh"
+#define TrigB 0
 #define Recon 1
-#define CH2 1
+#define CH2 0
+#define date 260422
+#include "G4XiAcceptanceCheck.hh"
 #include <TCanvas.h>
 void G4XiAcceptanceCheck(){
   SetStyle();
@@ -10,7 +11,7 @@ void G4XiAcceptanceCheck(){
 	TString WAcc,Target,Conf;
   WAcc = "_WB";
   int nfile = 30;
-  bool test_run = 1;
+  bool test_run = 0;
   if(test_run) nfile = 1;
 #if CH2
   TString file_dir = "./rootfiles/Geant4CH2/";
@@ -23,7 +24,6 @@ void G4XiAcceptanceCheck(){
 #endif
   //file_dir += "WeightedFermi/";
   file_dir += "W_Acc/";
-	int date = 260402;
   TString filename, figdir;
   TString tgt = "Carbon";
 #if CH2
@@ -43,8 +43,15 @@ void G4XiAcceptanceCheck(){
 	cout<<"Accpt file"<<endl;
 #if CH2
   TFile* acpt_file = TFile::Open("./Maps/CH2_ReconPE42__WB_260327.root");
+	if(date == 260422){
+		cout<<"Modifying date to "<<Form("%d",date)<<endl;
+  	acpt_file = TFile::Open("./Maps/CH2_ReconPE42__WB_260422.root");
+	}
 #else
   TFile* acpt_file = TFile::Open("./Maps/Carbon_ReconPE42__WB_260327.root");
+	if(date == 260422){
+  	acpt_file = TFile::Open("./Maps/Carbon_ReconPE42__WB_260422.root");
+	}
 #endif
   InitializeTriggerCondtions();
   g4genfitcarbon* Xi = new g4genfitcarbon(tree);
@@ -66,7 +73,10 @@ void G4XiAcceptanceCheck(){
 		figdir_base.ReplaceAll("figs","figs_TrigB");
 	}
 	if(test_run) figdir_base.ReplaceAll(tgt,tgt + "_testrun");
+#if CH2
+#else
   figdir_base.ReplaceAll(tgt,tgt+ "ForcedPi2Ph");
+#endif
   gSystem->mkdir(figdir_base, true);
   TFile* out_file = TFile::Open(figdir_base + "AcceptanceCorrectionMaps.root", "RECREATE");
   out_file->cd();
@@ -109,6 +119,7 @@ void G4XiAcceptanceCheck(){
     c_corr->Divide(3,2);
     for(int iv = 0; iv < variable.size();++iv){
       auto v1 = variable[iv];
+			if(v1 == "CosOpen" and (p == "P" or p == "Pi1" or p == "Pi2")) continue;
       c_corr->cd(iv+1);
       TString key = AcceptanceHistTitle1D(tgt, p, v1, "Gen" + trig);
       TH1* h_gen = (TH1*)hMap[key]->Clone();

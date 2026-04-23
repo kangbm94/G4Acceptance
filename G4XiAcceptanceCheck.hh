@@ -6,16 +6,41 @@ TString trig = "";
 vector<TString> CheckLists = {
     "Gen"
 };
-map<TString, vector<TString>> CorrectionConf {
-    {"AllTracked", {"GoodXi"}}
-};
-CorrPars = {
-    {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
-    {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "Ph"}},
-    {"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
-    {"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
-    {"PTracked", "Gen", "P", {"Mom", "DistT"}}
-};
+//map<TString, vector<TString>> CorrectionConf {
+    //{"AllTracked", {"GoodXi"}}
+//};
+#if CH2
+#if date == 260422
+		CorrPars = {
+			{"GoodXi", "GoodL", "Pi2", {"CosTh","Ph"}},
+			{"GoodL", "Gen", "Pi1", {"CosTh","Ph"}}
+		};
+#else
+		CorrPars = {
+		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
+		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
+		{"GoodL", "PPi1Tracked", "L", {"DistT","CosOpen"}},
+		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
+		{"PTracked", "Gen", "P", {"CosTh", "Mom"}}
+		};
+#endif
+#else
+#if date == 260422
+		CorrPars = {
+			{"GoodXi", "GoodL", "Pi2", {"CosTh","Ph"}},
+			{"GoodL", "Gen", "Pi1", {"CosTh","Ph"}}
+		};
+#else
+		CorrPars = {
+		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
+		//{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "Ph"}},
+		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "Ph"}},
+		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
+		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
+		{"PTracked", "Gen", "P", {"Mom", "DistT"}}
+		};
+#endif
+#endif
 TString Correction(TString part, TString num, TString den, TString v1, TString v2 = ""){
     TString suf;
     if(v2 == "") suf = "Cor" + part + num + den + v1;
@@ -40,9 +65,13 @@ void InitializeTriggerCondtions(){
         CheckLists[ic] = CheckLists[ic] + "TrigB";
     }
     cout<<"Updated CheckLists: "<<endl;
-    for(auto c:CorrPars){
+    for(auto &c:CorrPars){
+        cout<<"Updating CorrectionConf for "<<c.num<<" over "<<c.den<<endl;
         c.num = c.num + "TrigB"; 
         c.den = c.den + "TrigB";
+    }
+    for(auto c:CorrPars){
+        cout<<"Updated CorrectionConf for "<<c.num<<" over "<<c.den<<endl;
     }
     cout<<"Updated CorrectionConf: "<<endl;
     map<TString, int> colorMap_temp;
@@ -68,6 +97,9 @@ void InitializeCorrectionHistograms(TString tgt){
         }
         if(!num_acpt) CheckLists.push_back(num);
         if(!den_acpt) CheckLists.push_back(den);
+    }
+    for(auto chk:CheckLists){
+        cout<<"CheckList: "<<chk<<endl;
     }
     int nbinx;
     double minx, maxx;
@@ -396,10 +428,11 @@ void MakeChi2Map(TString tgt){
         }
         Chi2Map chi2map = {num, den, part_cor, cor_chi2};
         chi2Maps.push_back(chi2map);
-        double chi2_min = 1e9;
+        double chi2_min = -1;
         vector<TString> best_var;
         map<vector<TString>, double> cor_chi2_best;
         for(auto& [var, chi2]: cor_chi2){
+            if(chi2_min < 0) chi2_min = chi2;
             if(chi2 < chi2_min){
                 chi2_min = chi2;
                 best_var = var;
