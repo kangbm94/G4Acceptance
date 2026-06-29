@@ -12,6 +12,7 @@
 #include <TChain.h>
 #include <TStyle.h>
 #include <TEfficiency.h>
+#include "Math.hh"
 #ifndef SavePDF
 #define SavePDF 0
 #endif
@@ -269,11 +270,18 @@ double CosPsi(TVector3 v)
 }
 double DistT(TVector3 V)
 {
-    return hypot(V.x(), V.z() + 143);
+    TVector3 V_(V.X(),V.Y(),V.Z()+143);
+#if PosShift
+    V_.SetZ(V.Z() + 137);
+#endif
+    return hypot(V_.x(), V_.z());
 }
 double Dist(TVector3 V)
 {
     TVector3 V_(V.X(),V.Y(),V.Z()+143);
+#if PosShift
+    V_.SetZ(V.Z() + 137);
+#endif
     return V_.Mag();
 }
 double Omega(TVector3 v){

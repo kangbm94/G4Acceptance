@@ -2,10 +2,73 @@
 #include "TGraphErrors.h"
 #include <vector>
 double weight_th = 50;
+int over_cnt = 0;
 TString trig = "";
 vector<TString> CheckLists = {
     "Gen"
 };
+vector<TString> EventVars = {
+    "ctau_L", "ctau_Xi", "CThKK", "SqrtS",
+    "PolCTh", "PolCPhA", "PolCPhB", "PolCPhC",
+    "PolCThX", "PolCThZ"
+};
+TString Correction(TString part, TString num, TString den, TString v1, TString v2 = ""){
+    TString suf;
+    if(v2 == "") suf = "Cor" + part + num + den + v1;
+    else suf = "Cor" + part + num + den + v1 + v2;
+    return suf;
+}
+TString EventTitle(TString tgt, TString var, TString suff){
+    TString title = tgt + var + suff;
+    return title;
+}
+TString CorrectedEventTitle(TString tgt, TString var, TString suff, TString part_cor, TString num, TString den, TString v1, TString v2 = ""){
+    return EventTitle(tgt, var, suff) + Correction(part_cor, num, den, v1, v2); 
+}
+TString SetEventVarAxis(TString var, int &nbinx, double &minx, double &maxx){
+    TString axis = "";
+    if(var == "ctau_L"){
+        axis = "c#tau of #Lambda [mm]";
+        nbinx = 20; minx = 0; maxx = 320;
+    }
+    else if(var == "ctau_Xi"){
+        axis = "c#tau of #Xi [mm]";
+        nbinx = 20; minx = 0; maxx = 200;
+    }
+    else if(var == "CThKK"){
+        axis = "cos#theta*_{K^{-}K^{+}}";
+        nbinx = 20; minx = 0.8; maxx = 1;
+    }
+    else if(var == "SqrtS"){
+        axis = "#sqrt{s} [GeV]";
+        nbinx = 30; minx = 1.8; maxx = 2.4;
+    }
+    else if(var == "PolCTh"){
+        axis = "cos#theta";
+        nbinx = 10; minx = -1; maxx = 1;
+    }
+    else if(var == "PolCPhA"){
+        axis = "cos#phi_{#alpha}";
+        nbinx = 10; minx = -1; maxx = 1;
+    }
+    else if(var == "PolCPhB"){
+        axis = "cos#phi_{#beta}";
+        nbinx = 10; minx = -1; maxx = 1;
+    }
+    else if(var == "PolCPhC"){
+        axis = "cos#phi_{#gamma}";
+        nbinx = 10; minx = -1; maxx = 1;
+    }
+    else if(var == "PolCThX"){
+        axis = "cos#theta_{X}";
+        nbinx = 10; minx = -1; maxx = 1;
+    }
+    else if(var == "PolCThZ"){
+        axis = "cos#theta_{Z}";
+        nbinx = 10; minx = -1; maxx = 1;
+    }
+    return axis;
+}
 //map<TString, vector<TString>> CorrectionConf {
     //{"AllTracked", {"GoodXi"}}
 //};
@@ -16,37 +79,68 @@ vector<TString> CheckLists = {
 			{"GoodL", "Gen", "Pi1", {"CosTh","Ph"}}
 		};
 #else
+/*
+		CorrPars = {
+		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"Mom","CosOpen"}},
+		//{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
+		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "Ph"}},
+		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
+		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
+		{"PTracked", "Gen", "P", {"CosTh", "Mom"}}
+		};
+		*/
 		CorrPars = {
 		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
 		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
-		{"GoodL", "PPi1Tracked", "L", {"DistT","CosOpen"}},
+		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
 		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
 		{"PTracked", "Gen", "P", {"CosTh", "Mom"}}
 		};
 #endif
-#else
+#else// Carbon
 #if date == 260422
 		CorrPars = {
 			{"GoodXi", "GoodL", "Pi2", {"CosTh","Ph"}},
 			{"GoodL", "Gen", "Pi1", {"CosTh","Ph"}}
 		};
 #else
+/*
 		CorrPars = {
-		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
-		//{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "Ph"}},
+		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"Mom","CosOpen"}},
+		//{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
 		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "Ph"}},
 		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
 		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
-		{"PTracked", "Gen", "P", {"Mom", "DistT"}}
+		{"PTracked", "Gen", "P", {"CosTh","Mom"}}
+		};
+		*/
+/*
+		CorrPars = {
+		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
+		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
+		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
+		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
+		{"PTracked", "Gen", "P", {"CosTh","Mom"}}
+		};
+		*/
+/*
+		CorrPars = {
+		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
+		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom"}},
+		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
+		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
+		{"PTracked", "Gen", "P", {"Mom"}}
+		};
+*/
+		CorrPars = {
+		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
+		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom","Ph"}},
+		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
+		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
+		{"PTracked", "Gen", "P", {"Mom"}}
 		};
 #endif
 #endif
-TString Correction(TString part, TString num, TString den, TString v1, TString v2 = ""){
-    TString suf;
-    if(v2 == "") suf = "Cor" + part + num + den + v1;
-    else suf = "Cor" + part + num + den + v1 + v2;
-    return suf;
-}
 TString CorrectionHists(TString pre, TString part, TString var, TString suff, TString part_cor, TString num, TString den, TString v1, TString v2 = ""){
     return AcceptanceHistTitle1D(pre, part, var, suff) + Correction(part_cor,num, den, v1, v2);
 }
@@ -127,12 +221,36 @@ void InitializeCorrectionHistograms(TString tgt){
                 key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1, v2);
                 hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
                 hMap[key] -> SetLineColor(colorMap[chk]);
-            }
-        }
-    }
-            }
-        }
-    }
+            }//iv2
+        }//iv1
+    }//cp
+            }//iv
+        }//particle
+        for(auto ev: EventVars){
+            TString key = EventTitle(tgt, ev, chk);
+            Xtitle = SetEventVarAxis(ev, nbinx, minx, maxx);
+            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
+            hMap[key] -> SetLineColor(colorMap[chk]);
+    for(auto cp:CorrPars){
+        TString num = cp.num;
+        if(num != chk) continue;
+        TString den = cp.den;
+        TString pc = cp.p_cor;
+        for(int iv1 = 0; iv1 < variable.size();++iv1){
+            auto v1 = variable[iv1];
+            key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1);
+            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
+            hMap[key] -> SetLineColor(colorMap[chk]);
+            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
+                auto v2 = variable[iv2];
+                key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1, v2);
+                hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
+                hMap[key] -> SetLineColor(colorMap[chk]);
+            }//iv2
+        }//iv1
+    }//cp
+        }//ev
+    }//CheckLists
     for(auto p:particle){
         for(int iv=0;iv<variable.size();++iv){
             auto v = variable[iv];
@@ -143,15 +261,36 @@ void InitializeCorrectionHistograms(TString tgt){
             hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
             key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor"+trig);
             hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
+            key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcpt"+trig);
+            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
+            key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcptCor"+trig);
+            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
         }
+    }
+    for(auto ev: EventVars){
+        TString key = EventTitle(tgt, ev, "XiAcpt"+trig);
+        Xtitle = SetEventVarAxis(ev, nbinx, minx, maxx);
+        hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
+        key = EventTitle(tgt, ev, "XiAcptCor"+trig);
+        hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
+        key = EventTitle(tgt, ev, "GoodXiCor"+trig);
+        hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
+        key = EventTitle(tgt, ev, "XiRecAcpt"+trig);
+        hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
+        key = EventTitle(tgt, ev, "XiRecAcptCor"+trig);
+        hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
     }
 };
 class Event{
     private:
         g4genfitcarbon* gf;
+        TVector3 Km, Kp;
         TVector3 P, Pi1, Pi2, L, Xi;
-        TVector3 VL,VXi;
+        TVector3 VL,VXi,VXiProd;
+        TVector3 PRec, Pi1Rec, Pi2Rec, LRec, XiRec;
+        TVector3 VLRec,VXiRec,VXiProdRec;
         map<TString, vector<TVector3>> DC;// DataContainer
+        map<TString, vector<TVector3>> DCRec;// DataContainer
         TString tgt;
     public:
         Event(g4genfitcarbon* g, TString t): gf(g), tgt(t){
@@ -162,16 +301,57 @@ class Event{
             Xi = L + Pi2;
             VL.SetXYZ(gf->G4pvtx_x, gf->G4pvtx_y, gf->G4pvtx_z);
             VXi.SetXYZ(gf->G4pi2vtx_x, gf->G4pi2vtx_y, gf->G4pi2vtx_z);
+            VXiProd.SetXYZ(gf->G4xivtx_x, gf->G4xivtx_y, gf->G4xivtx_z);
+            Km.SetXYZ(gf->G4kmmom_x, gf->G4kmmom_y, gf->G4kmmom_z);
+            Kp.SetXYZ(gf->G4kpmom_x, gf->G4kpmom_y, gf->G4kpmom_z); 
             DC = {
                 {"P",{P,Pi1,VL}},
                 {"Pi1",{Pi1,P,VL}},
                 {"Pi2",{Pi2,L,VXi}},
+                #if LVtxIsXi
+                {"L",{L,Pi1,VXi}},
+                #else
                 {"L",{L,Pi1,VL}},
+                #endif
                 {"Xi",{Xi,Pi2,VXi}},
+            };
+            if(gf->Xiflag){
+                PRec.SetXYZ(gf->KFXiDecaysMom_x->at(0), gf->KFXiDecaysMom_y->at(0), gf->KFXiDecaysMom_z->at(0));
+                Pi1Rec.SetXYZ(gf->KFXiDecaysMom_x->at(1), gf->KFXiDecaysMom_y->at(1), gf->KFXiDecaysMom_z->at(1));
+                Pi2Rec.SetXYZ(gf->KFXiDecaysMom_x->at(2), gf->KFXiDecaysMom_y->at(2), gf->KFXiDecaysMom_z->at(2));
+                LRec.SetXYZ(gf->KFLambdaMom_x, gf->KFLambdaMom_y, gf->KFLambdaMom_z);
+                XiRec.SetXYZ(gf->KFXiMom_x, gf->KFXiMom_y, gf->KFXiMom_z);
+                VLRec.SetXYZ(gf->GFLambdaDecayVtx_x, gf->GFLambdaDecayVtx_y, gf->GFLambdaDecayVtx_z);
+                VXiRec.SetXYZ(gf->GFXiDecayVtx_x, gf->GFXiDecayVtx_y, gf->GFXiDecayVtx_z);
+                VXiProdRec.SetXYZ(gf->KFXiProductionVtx_x, gf->KFXiProductionVtx_y, gf->KFXiProductionVtx_z);
+            }
+            else{
+                PRec.SetXYZ(0,0,0);
+                Pi1Rec.SetXYZ(0,0,0);
+                Pi2Rec.SetXYZ(0,0,0);
+                LRec.SetXYZ(0,0,0);
+                XiRec.SetXYZ(0,0,0);
+                VLRec.SetXYZ(0,0,0);
+                VXiRec.SetXYZ(0,0,0);
+                VXiProdRec.SetXYZ(0,0,0);
+            }
+            DCRec = {
+                {"P",{PRec,Pi1Rec,VLRec}},
+                {"Pi1",{Pi1Rec,PRec,VLRec}},
+                {"Pi2",{Pi2Rec,LRec,VXiRec}},
+                #if LVtxIsXi
+                {"L",{LRec,Pi1Rec,VXiRec}},
+                #else
+                {"L",{LRec,Pi1Rec,VLRec}},
+                #endif
+                {"Xi",{XiRec,Pi2Rec,VXiRec}},
             };
         }
         map<TString, vector<TVector3>> GetDataContainer(){
             return DC;
+        }
+        map<TString, vector<TVector3>> GetDataContainerRec(){
+            return DCRec;
         }
         bool Good(){
             if(Xi.Mag() <1e-5) return false;
@@ -180,16 +360,19 @@ class Event{
             #endif
             return true;
         }
-        double GetWeight(TString part, TString num, TString den, TString v1, TString v2 = ""){
+        double GetWeightDC(TString part, TString num, TString den, TString v1, TString v2 = "", map<TString, vector<TVector3>> DC_ = map<TString, vector<TVector3>>()){
             TString key;
             double var1,var2;
-            var1 = GetVariable(DC[part][0], DC[part][1], DC[part][2], v1);
+            var1 = GetVariable(DC_[part][0], DC_[part][1], DC_[part][2], v1);
             double w;
             if(v2 != ""){
-                var2 = GetVariable(DC[part][0], DC[part][1], DC[part][2], v2);
+                var2 = GetVariable(DC_[part][0], DC_[part][1], DC_[part][2], v2);
                 key = EffTitle2D(tgt, part, v1, v2, num, den);
 #if PerDist
-                if(v1 != "DistT" and v2 != "DistT") key += GetDistKey(DC[part][2]);
+                if(v1 != "DistT" and v2 != "DistT" and part != "Xi" and part != "Pi2") key += GetDistKey(DC_[part][2]);
+#endif
+#if PerXiDist
+                if(v1 != "DistT" and v2 != "DistT" and (part == "Xi" or part == "Pi2")) key += GetDistKey(DC_[part][2]);
 #endif
                 if(effMap[key] == nullptr){
                     cout<<"Efficiency histogram "<<key<<" not found!"<<endl;
@@ -209,15 +392,130 @@ class Event{
             }
             return w;
         }
+        double GetWeight(TString part, TString num, TString den, TString v1, TString v2 = ""){
+            return GetWeightDC(part, num, den, v1, v2, DC);
+        }
+        double GetWeightRec(TString part, TString num, TString den, TString v1, TString v2 = ""){
+            return GetWeightDC(part, num, den, v1, v2, DCRec);
+        }
+        double GetEventVariable(TString var){
+            double val;
+            if(var == "ctau_L"){
+                double gb_L = L.Mag()/mLd;
+                val = (VL - VXi).Mag() / gb_L;
+            }
+            else if(var == "ctau_Xi"){
+                double gb_Xi = Xi.Mag()/mXi;
+                val = (VL - VXi).Mag() / gb_Xi;
+            }
+            else if(var == "CThKK"){
+                TLorentzVector LVKM(Km, hypot(Km.Mag(), mk));
+                TLorentzVector LVKP(Kp, hypot(Kp.Mag(), mk));
+                TLorentzVector LVpTarget(0,0,0,mp);
+                TLorentzVector LVpKM = LVpTarget + LVKM;
+                auto Boost = LVpKM.BoostVector();
+                LVKM.Boost(-Boost);
+                LVKP.Boost(-Boost);
+                TVector3 TVKp = LVKP.Vect();
+                TVector3 TVKm = LVKM.Vect();
+                val = cos(TVKp.Angle(TVKm));
+            }
+            else if(var == "SqrtS"){
+                TLorentzVector LVKP(Kp, hypot(Kp.Mag(), mk));
+                TLorentzVector LVXi(Xi, hypot(Xi.Mag(), mXi));
+                auto LVKpXi = LVKP + LVXi;
+                val = LVKpXi.M();
+            }
+            else if(var == "PolCTh"){
+                PolaConverter PC(Km, Kp, Xi, L, P, Pi1, Pi2);
+                val = cos(PC.GetTheta());
+            }
+            else if(var == "PolCPhA"){
+                PolaConverter PC(Km, Kp, Xi, L, P, Pi1, Pi2);
+                val = cos(PC.GetPhiA());
+            }
+            else if(var == "PolCPhB"){
+                PolaConverter PC(Km, Kp, Xi, L, P, Pi1, Pi2);
+                val = cos(PC.GetPhiB());
+            }
+            else if(var == "PolCPhC"){
+                PolaConverter PC(Km, Kp, Xi, L, P, Pi1, Pi2);
+                val = cos(PC.GetPhiC());
+            }
+            else if(var == "PolCThX"){
+                PolaConverter PC(Km, Kp, Xi, L, P, Pi1, Pi2);
+                val = cos(PC.GetThetaX());
+            }
+            else if(var == "PolCThZ"){
+                PolaConverter PC(Km, Kp, Xi, L, P, Pi1, Pi2);
+                val = cos(PC.GetThetaZ());
+            }
+            return val;
+        }
+        double GetEventVariableRec(TString var){
+            double val;
+            if(var == "ctau_L"){
+                double gb_L = LRec.Mag()/mLd;
+                val = (VLRec - VXiRec).Mag() / gb_L;
+            }
+            else if(var == "ctau_Xi"){
+                double gb_Xi = XiRec.Mag()/mXi;
+                val = (VLRec - VXiRec).Mag() / gb_Xi;
+            }
+            else if(var == "CThKK"){
+                TLorentzVector LVKM(Km, hypot(Km.Mag(), mk));
+                TLorentzVector LVKP(Kp, hypot(Kp.Mag(), mk));
+                TLorentzVector LVpTarget(0,0,0,mp);
+                TLorentzVector LVpKM = LVpTarget + LVKM;
+                auto Boost = LVpKM.BoostVector();
+                LVKM.Boost(-Boost);
+                LVKP.Boost(-Boost);
+                TVector3 TVKp = LVKP.Vect();
+                TVector3 TVKm = LVKM.Vect();
+                val = cos(TVKp.Angle(TVKm));
+            }
+            else if(var == "SqrtS"){
+                TLorentzVector LVKP(Kp, hypot(Kp.Mag(), mk));
+                TLorentzVector LVXi(XiRec, hypot(XiRec.Mag(), mXi));
+                auto LVKpXi = LVKP + LVXi;
+                val = LVKpXi.M();
+            }
+            else if(var == "PolCTh"){
+                PolaConverter PC(Km, Kp, XiRec, LRec, PRec, Pi1Rec, Pi2Rec);
+                val = cos(PC.GetTheta());
+            }
+            else if(var == "PolCPhA"){
+                PolaConverter PC(Km, Kp, XiRec, LRec, PRec, Pi1Rec, Pi2Rec);
+                val = cos(PC.GetPhiA());
+            }
+            else if(var == "PolCPhB"){
+                PolaConverter PC(Km, Kp, XiRec, LRec, PRec, Pi1Rec, Pi2Rec);
+                val = cos(PC.GetPhiB());
+            }
+            else if(var == "PolCPhC"){
+                PolaConverter PC(Km, Kp, XiRec, LRec, PRec, Pi1Rec, Pi2Rec);
+                val = cos(PC.GetPhiC());
+            }
+            else if(var == "PolCThX"){
+                PolaConverter PC(Km, Kp, XiRec, LRec, PRec, Pi1Rec, Pi2Rec);
+                val = cos(PC.GetThetaX());
+            }
+            else if(var == "PolCThZ"){
+                PolaConverter PC(Km, Kp, XiRec, LRec, PRec, Pi1Rec, Pi2Rec);
+                val = cos(PC.GetThetaZ());
+            }
+            return val;
+        }
 };
-
 void FillHistograms(g4genfitcarbon* gf, TString tgt){
     Event event(gf, tgt);
     if(!event.Good()) return;
     auto DC = event.GetDataContainer();
+    auto DCRec = event.GetDataContainerRec();
     TString key;
     double w;
     double weight = 1;
+    double weightRec = 1;
     for(auto cp:CorrPars){
         TString num = cp.num;
         TString den = cp.den;
@@ -226,8 +524,23 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
         TString v1 = var_cor[0];
         TString v2 = var_cor.size() > 1 ? var_cor[1] : "";
         weight *= event.GetWeight(pc, num, den, v1, v2);
+        if(gf->Xiflag){
+            double w = event.GetWeightRec(pc, num, den, v1, v2);
+            if(w > weight_th or isnan(w)){
+                double var1 = GetVariable(DCRec[pc][0], DCRec[pc][1], DCRec[pc][2], v1);
+                double var2 = v2 != "" ? GetVariable(DCRec[pc][0], DCRec[pc][1], DCRec[pc][2], v2) : 0;
+                cout<<Form("Event weightRec for %s correction over threshold! w = %g, event count over threshold = %d", Correction(pc,num,den,v1,v2).Data(), w, over_cnt)<<endl;
+                cout<<Form("Event variables: %s = %g, %s = %g", v1.Data(), var1, v2.Data(), var2)<<endl;
+            }
+            weightRec *= w;
+        }
     }
     if(weight > weight_th) return;
+    if(isnan(weight)) return;
+    if(weightRec > weight_th or isnan(weightRec)){
+        over_cnt++;
+        cout<<Form("w = %g, wRec = %g, event count over threshold = %d", weight, weightRec, over_cnt)<<endl;
+    }    
     for(auto p:particle){
         for(int iv=0;iv<variable.size();++iv){
             auto v = variable[iv];
@@ -260,17 +573,59 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
                 }
             }
         }
-            }
+            }//chk
             if(SuffixCheck("XiAcpt", gf)){
                 key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt" + trig);
                 hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v));
                 key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor" + trig);
                 hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v), weight);
+                if(weightRec < weight_th and !isnan(weightRec)){
+                    key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcpt" + trig);
+                    hMap[key]->Fill(GetVariable(DCRec[p][0], DCRec[p][1],DCRec[p][2], v));
+                    key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcptCor" + trig);
+                    hMap[key]->Fill(GetVariable(DCRec[p][0], DCRec[p][1],DCRec[p][2], v), weightRec);
+                }
             }
             if(SuffixCheck("GoodXi", gf)){
                 key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor" + trig);
                 hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v), weight);
             }
+        }//iv
+    }//particle
+    for(auto ev:EventVars){
+        for(auto chk: CheckLists){
+            if(!SuffixCheck(chk, gf)) continue;
+            if(!TrigCheck(trig, gf)) continue;
+            key = EventTitle(tgt, ev, chk);
+            hMap[key]->Fill(event.GetEventVariable(ev));
+            for(auto cp:CorrPars){
+                TString num = cp.num;
+                if(num != chk) continue;
+                TString den = cp.den;
+                TString pc = cp.p_cor;
+                vector<TString> var_cor = cp.var_cor;
+                TString v1 = var_cor[0];
+                TString v2 = var_cor.size() > 1 ? var_cor[1] : "";
+                w = event.GetWeight(pc, num, den, v1, v2);
+                key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1, v2);
+                hMap[key]->Fill(event.GetEventVariable(ev), w);
+            }
+        }
+        if(SuffixCheck("XiAcpt", gf)){
+            key = EventTitle(tgt, ev, "XiAcpt" + trig);
+            hMap[key]->Fill(event.GetEventVariable(ev));
+            key = EventTitle(tgt, ev, "XiAcptCor" + trig);
+            hMap[key]->Fill(event.GetEventVariable(ev), weight);
+            if(weightRec < weight_th and !isnan(weightRec)){
+                key = EventTitle(tgt, ev, "XiRecAcpt" + trig);
+                hMap[key]->Fill(event.GetEventVariableRec(ev));
+                key = EventTitle(tgt, ev, "XiRecAcptCor" + trig);
+                hMap[key]->Fill(event.GetEventVariableRec(ev), weightRec);
+            }
+        }
+        if(SuffixCheck("GoodXi", gf)){
+            key = EventTitle(tgt, ev, "GoodXiCor" + trig);
+            hMap[key]->Fill(event.GetEventVariable(ev), weight);
         }
     }
 }
@@ -285,11 +640,20 @@ void NormalizeHistograms(TString tgt){
             key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt"+trig);
             hMap[key]->Scale(1./maxi);
             hMap[key]->SetLineColor(kBlue);
+            key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcpt"+trig);
+            hMap[key]->Scale(1./maxi);
+            hMap[key]->SetLineColor(kGreen+2);
             key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor"+trig);
             hMap[key]->Scale(1./maxi);
             hMap[key]->SetLineColor(kRed);
             hMap[key]->SetMarkerColor(kRed);
             hMap[key]->SetMarkerStyle(20);
+            key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcptCor"+trig);
+            hMap[key]->Scale(1./maxi);
+            hMap[key]->SetLineColor(kOrange+7);
+            hMap[key]->SetMarkerColor(kOrange+7);
+            hMap[key]->SetMarkerStyle(20);
+
             key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor"+trig);
             hMap[key]->Scale(1./maxi);
             hMap[key]->SetLineColor(kGreen+2);
@@ -314,9 +678,57 @@ void NormalizeHistograms(TString tgt){
             }
         }
     }
+            }//chklist
+        }//iv
+    }//particle
+    //ctau hists
+    for(auto ev:EventVars){
+        double maxi = 0;
+        key = EventTitle(tgt, ev, "Gen" + trig);
+        maxi = hMap[key]->GetMaximum();
+        key = EventTitle(tgt, ev, "XiAcpt"+trig);
+        hMap[key]->Scale(1./maxi);
+        hMap[key]->SetLineColor(kBlue);
+        key = EventTitle(tgt, ev, "XiRecAcpt"+trig);
+        hMap[key]->Scale(1./maxi);
+        hMap[key]->SetLineColor(kGreen+2);
+        key = EventTitle(tgt, ev, "XiAcptCor"+trig);
+        hMap[key]->Scale(1./maxi);
+        hMap[key]->SetLineColor(kRed);
+        hMap[key]->SetMarkerColor(kRed);
+        hMap[key]->SetMarkerStyle(20);
+        key = EventTitle(tgt, ev, "XiRecAcptCor"+trig);
+        hMap[key]->Scale(1./maxi);
+        hMap[key]->SetLineColor(kOrange+7);
+        hMap[key]->SetMarkerColor(kOrange+7);
+        hMap[key]->SetMarkerStyle(20);
+        key = EventTitle(tgt, ev, "GoodXiCor"+trig);
+        hMap[key]->Scale(1./maxi);
+        hMap[key]->SetLineColor(kGreen+2);
+        hMap[key]->SetMarkerColor(kGreen+2);
+        hMap[key]->SetMarkerStyle(20);
+        for(auto chk: CheckLists){
+            key = EventTitle(tgt, ev, chk);
+            hMap[key]->Scale(1./maxi);
+    for(auto cp:CorrPars){
+        TString num = cp.num;
+        if(num != chk) continue;
+        TString den = cp.den;
+        TString pc = cp.p_cor;
+        for(int iv1 = 0; iv1 < variable.size();++iv1){
+            auto v1 = variable[iv1];
+            key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1);
+            hMap[key]->Scale(1./maxi);
+            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
+                auto v2 = variable[iv2];
+                key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1, v2);
+                hMap[key]->Scale(1./maxi);
             }
         }
     }
+        }//chklist
+    }//ev
+
 }
 TGraphErrors* MakeDivisionGraph(TH1* h1, TH1* h2){
     TGraphErrors* g = new TGraphErrors();
@@ -412,6 +824,7 @@ void MakeChi2Map(TString tgt){
         part_cor = cor.p_cor;
         for(int iv1 = 0; iv1 < variable.size();++iv1){
             auto v1 = variable[iv1];
+            if(v1 == "DistT") continue;
             if(part_cor == "P" or part_cor == "Pi1" or part_cor == "Pi2"){
                 if(v1 == "CosOpen") continue;
             }
@@ -419,6 +832,7 @@ void MakeChi2Map(TString tgt){
             cout<<"chi2 for "<<part_cor<<" "<<num<<"/"<<den<<" with var "<<v1<<" is "<<cor_chi2[{v1,""}]<<endl;
             for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
                 auto v2 = variable[iv2];
+                if(v2 == "DistT") continue;
                 if(part_cor == "P" or part_cor == "Pi1" or part_cor == "Pi2"){
                     if(v2 == "CosOpen") continue;
                 }

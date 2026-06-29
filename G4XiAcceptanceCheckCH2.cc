@@ -1,21 +1,17 @@
 #define PerDist 1
 #define PerXiDist 1
-#define LVtxIsXi 0
+#define LVtxIsXi 1
 #define TrigB 0
 #define Recon 1
 #define CH2 1
-#define date 260623
-#define PosShift 1
+#define date 260525
 #include "G4XiAcceptanceCheck.hh"
 #include <TCanvas.h>
-void G4XiAcceptanceCheck(){
+void G4XiAcceptanceCheckCH2(){
   SetStyle();
   double pxi = 0;
-	TString WAcc,Target,Conf,LVtxConf;
+  TString WAcc,Target,Conf;
   WAcc = "_WB";
-#if LVtxIsXi
-    LVtxConf = "_LVtxIsXi";
-#endif
   int nfile = 30;
   bool test_run = 0;
   if(test_run) nfile = 1;
@@ -23,20 +19,13 @@ void G4XiAcceptanceCheck(){
   TString file_dir = "./rootfiles/Geant4CH2/";
   Conf = "CH2";
   Target = "CH2";
-#if PosShift
-  file_dir = "rootfiles/Geant4CH2/6mmShift/";
-  Conf = "CH26mmShift";
-#endif
 #else
-  TString file_dir = "./rootfiles/Geant4Prod/W_Acc/";
+  TString file_dir = "./rootfiles/Geant4Prod/";
   Conf = "Prod";
   Target = "Carbon";
-#if PosShift
-  file_dir = "rootfiles/Geant4Prod/6mmShift/";
-  Conf = "Prod6mmShift";
-#endif
 #endif
   //file_dir += "WeightedFermi/";
+  file_dir += "W_Acc/";
   TString filename, figdir;
   TString tgt = "Carbon";
 #if CH2
@@ -47,14 +36,8 @@ void G4XiAcceptanceCheck(){
   for(int i=0;i<nfile;++i){
 #if CH2
     filename = Form("XiReconCH2_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
-#if PosShift
-		filename = Form("XiReconCH2_P_E42_%d_6mmShifted_GenfitCarbonGeant4Ver5.root",i);
-#endif
 #else
     filename = Form("XiReconProd_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
-#if PosShift
-		filename = Form("XiReconProd_P_E42_%d_6mmShifted_GenfitCarbonGeant4Ver5.root",i);
-#endif
 #endif
     cout<<"Loading "<<filename<<endl;
     tree -> Add(file_dir+filename);
@@ -72,11 +55,11 @@ void G4XiAcceptanceCheck(){
   }
   if(date >= 260523){
     cout<<"Modifying date to "<<Form("%d",date)<<endl;
-  #if LVtxIsXi
-    acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
-  #else
-    acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
-  #endif
+#if LVtxIsXi
+    acpt_file = TFile::Open("./Maps/CH2_ReconPE42__LVtxIsXi_WB_260525.root");
+#else
+    acpt_file = TFile::Open("./Maps/CH2_ReconPE42__WB_260525.root");
+#endif
   }
 #else
   TFile* acpt_file = TFile::Open("./Maps/Carbon_ReconPE42__WB_260327.root");
@@ -89,13 +72,11 @@ void G4XiAcceptanceCheck(){
   }
   if(date >= 260523){
     cout<<"Modifying date to "<<Form("%d",date)<<endl;
-  #if LVtxIsXi
-    //acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date));
-    acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260609));
-  #else
-    //acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date));
-    acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260609));
-  #endif
+#if LVtxIsXi
+    acpt_file = TFile::Open("./Maps/Carbon_ReconPE42_LVtxIsXi_WB_260525.root");
+#else
+    acpt_file = TFile::Open("./Maps/Carbon_ReconPE42__WB_260523.root");
+#endif
   }
 #endif
   cout<<Form("Run Target: %s, Date: %d", tgt.Data(), date)<<endl;
@@ -118,22 +99,10 @@ void G4XiAcceptanceCheck(){
   if(TrigB){
     figdir_base.ReplaceAll("figs","figs_TrigB");
   }
-#if PerXiDist
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
-#endif
-#if PerDist
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
-#endif
-#if PosShift
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
-#endif
   if(test_run) figdir_base.ReplaceAll(tgt,tgt + "_testrun");
 #if CH2
 #else
   //figdir_base.ReplaceAll(tgt,tgt+ "ForcedPi2Ph");
-#endif
-#if LVtxIsXi
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_LVtxIsXi").Data());
 #endif
   gSystem->mkdir(figdir_base, true);
   TFile* out_file = TFile::Open(figdir_base + "AcceptanceCorrectionMaps.root", "RECREATE");
@@ -143,7 +112,6 @@ void G4XiAcceptanceCheck(){
   }
   out_file->Write();
   for(auto p:particle){
-    //Each step by gen
     TString figdir = figdir_base  + "/StepByGen/";
     gSystem->mkdir(figdir, true);
     TString ct = Form("Canv_%s", p.Data());
@@ -174,7 +142,6 @@ void G4XiAcceptanceCheck(){
     }
     c->SaveAs(figdir + ct + ".pdf");
     
-    //Step by step correction
     figdir = figdir_base  + "/StepByStep/";
     gSystem->mkdir(figdir, true);
     ct = Form("CanvStepByStep_%s", p.Data());
@@ -202,7 +169,7 @@ void G4XiAcceptanceCheck(){
       TLegend* leg = new TLegend(0.6,0.7,0.9,0.9);
       leg->SetFillStyle(0);
       leg->SetBorderSize(0);
-      leg->AddEntry(h_gen, DenConf + trig, "l");
+      leg->AddEntry(h_gen, "Gen" + trig, "l");
       for(auto chk: CheckLists){
         if(chk == "Gen" + trig) continue;
         if(chk == DenConf) continue;
@@ -217,7 +184,6 @@ void G4XiAcceptanceCheck(){
     }
     c_sbs->SaveAs(figdir + ct + ".pdf");
 
-    //Recon with final correction
     TString figdir_rec = figdir_base + "/Recon/";
     gSystem->mkdir(figdir_rec, true);
     ct = Form("Canv_%s_FinalCorr", p.Data());
@@ -238,28 +204,19 @@ void G4XiAcceptanceCheck(){
       key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcpt"+trig);
       auto h_xiacpt = (TH1*)hMap[key]->Clone();
       h_xiacpt ->Draw("hist same");
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiRecAcpt"+trig);
-      auto h_xirecacpt = (TH1*)hMap[key]->Clone();
-      h_xirecacpt ->Draw("hist same");
       key = AcceptanceHistTitle1D(tgt, p, v1, "GoodXiCor"+trig);
       auto h_goodxicor = (TH1*)hMap[key]->Clone();
       //h_goodxicor->Draw("pe same");
       key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcptCor"+trig);
       auto h_xiacptcor = (TH1*)hMap[key]->Clone();
       h_xiacptcor->Draw("pe same"); 
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiRecAcptCor"+trig);
-      auto h_xirecacptcor = (TH1*)hMap[key]->Clone();
-      h_xirecacptcor->Draw("pe same"); 
       leg->AddEntry(h_xiacpt, "XiAcpt"+trig, "l");
-      leg->AddEntry(h_xirecacpt, "XiRecAcpt"+trig, "l");
       //leg->AddEntry(h_goodxicor, "GoodXiCor", "pe");
       leg->AddEntry(h_xiacptcor, "XiAcptCor"+trig, "pe");
-      leg->AddEntry(h_xirecacptcor, "XiRecAcptCor"+trig, "pe");
       leg->Draw();
     }
     c_corr->SaveAs(figdir_rec + ct + ".pdf");
-   
-    //Recon with final correction and ratio
+    
     figdir_rec = figdir_base + "/Recon_w_rat/";
     gSystem->mkdir(figdir_rec, true);
     ct = Form("Canv_%s_FinalCorr_w_rat", p.Data());
@@ -268,7 +225,7 @@ void G4XiAcceptanceCheck(){
     for(int iv = 0; iv < variable.size();++iv){
       auto v1 = variable[iv];
       if(v1 == "CosOpen" and (p == "P" or p == "Pi1" or p == "Pi2")) continue;
-      c_corr_rat->cd(iv+1);
+      c_corr->cd(iv+1);
       TString key = AcceptanceHistTitle1D(tgt, p, v1, "Gen" + trig);
       TH1* h_gen = (TH1*)hMap[key]->Clone();
       h_gen->GetYaxis()->SetRangeUser(0, h_gen->GetMaximum()*1.5);
@@ -279,37 +236,24 @@ void G4XiAcceptanceCheck(){
       key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcpt"+trig);
       auto h_xiacpt = (TH1*)hMap[key]->Clone();
       h_xiacpt ->Draw("hist same");
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiRecAcpt"+trig);
-      auto h_xirecacpt = (TH1*)hMap[key]->Clone();
-      h_xirecacpt ->Draw("hist same");
       key = AcceptanceHistTitle1D(tgt, p, v1, "GoodXiCor"+trig);
       auto h_goodxicor = (TH1*)hMap[key]->Clone();
       //h_goodxicor->Draw("pe same");
       key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcptCor"+trig);
       auto h_xiacptcor = (TH1*)hMap[key]->Clone();
       h_xiacptcor->Draw("pe same"); 
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiRecAcptCor"+trig);
-      auto h_xirecacptcor = (TH1*)hMap[key]->Clone();
-      h_xirecacptcor->Draw("pe same"); 
       auto gr = MakeDivisionGraph(h_xiacptcor, h_gen);
       gr->SetMarkerColor(kAzure);
       gr->Draw("PE same");
-      auto grrec = MakeDivisionGraph(h_xirecacptcor, h_gen);
-      grrec->SetMarkerColor(kMagenta);
-      grrec->Draw("PE same");
       leg->AddEntry(h_gen, "Gen" + trig, "l");
       leg->AddEntry(h_xiacpt, "XiAcpt"+trig, "l");
-      leg->AddEntry(h_xirecacpt, "XiRecAcpt"+trig, "l");
       //leg->AddEntry(h_goodxicor, "GoodXiCor", "pe");
       leg->AddEntry(h_xiacptcor, "XiAcptCor"+trig, "pe");
-      leg->AddEntry(h_xirecacptcor, "XiRecAcptCor"+trig, "pe");
       leg->AddEntry(gr, "Ratio", "pe");
-      leg->AddEntry(grrec, "Rec Ratio", "pe");
       leg->Draw();
     }
-    c_corr_rat->SaveAs(figdir_rec + ct + ".pdf");
+    c_corr->SaveAs(figdir_rec + ct + ".pdf");
 
-    //Chi2 Evaluation and correction comparison
     vector<map<TString, double>> best_chi2_lists;
     for(int icm = 0; icm < chi2Maps_best.size();++icm){
       auto cp = chi2Maps_best[icm];
@@ -414,172 +358,5 @@ void G4XiAcceptanceCheck(){
         c_corr->SaveAs(figdir + ct + ".pdf");
       }
     }
-  }//part
-  figdir_base+= "/EventVars/";
-  for(auto ev: EventVars){
-    cout<<"EventVar: "<<ev<<endl;
-    //Each step by gen
-    TString figdir = figdir_base  + "StepByGen/";
-    gSystem->mkdir(figdir, true);
-    TString ct = Form("Canv_%s", ev.Data());
-    TCanvas* c0 = new TCanvas(ct, ct, 1600, 1200);
-    {
-      TString key = EventTitle(tgt, ev, "Gen"+trig);
-      TH1* h_gen = (TH1*)hMap[key]->Clone();
-      h_gen->GetYaxis()->SetRangeUser(0,h_gen->GetMaximum()*1.5);
-      h_gen->Draw("hist");
-      TLegend* leg = new TLegend(0.6,0.7,0.9,0.9);
-      leg->SetFillStyle(0);
-      leg->SetBorderSize(0);
-      leg->AddEntry(h_gen, "Gen" + trig, "l");
-      for(auto chk: CheckLists){
-        if(chk == "Gen" + trig) continue;
-        key = EventTitle(tgt, ev, chk);
-        auto gr = MakeDivisionGraph(hMap[key], h_gen);
-        cout<<"Divided by "<<key<<endl;
-        gr->Draw("PE same");
-        leg->AddEntry(gr, chk, "pe");
-      }
-      leg->Draw();
-    }
-    c0->SaveAs(figdir + ct + ".pdf");
-
-    //Step by step correction
-    figdir = figdir_base  + "StepByStep/";
-    gSystem->mkdir(figdir, true);
-    ct = Form("CanvStepByStep_%s", ev.Data());
-    TCanvas* c_sbs = new TCanvas(ct, ct, 1600, 1200);
-    {
-      TString key = EventTitle(tgt, ev, "Gen"+trig);
-      TH1* h_gen = (TH1*)hMap[key]->Clone();
-      h_gen->GetYaxis()->SetRangeUser(0,h_gen->GetMaximum()*1.5);
-      h_gen->Draw("hist");
-      TLegend* leg = new TLegend(0.6,0.7,0.9,0.9);
-      leg->SetFillStyle(0);
-      leg->SetBorderSize(0);
-      leg->AddEntry(h_gen, "Gen" + trig, "l");
-      for(auto chk: CheckLists){
-        if(chk == "Gen" + trig) continue;
-        key = EventTitle(tgt, ev, chk);
-        if(hMap[key]->Integral()>h_gen->Integral())continue;
-        cout<<"Divided by "<<key<<"w Maxi "<<hMap[key]->GetMaximum()<<endl;
-        auto gr = MakeDivisionGraph(hMap[key], h_gen);
-        gr->Draw("PE same");
-        leg->AddEntry(gr, chk, "pe");
-      }
-    }
-    c_sbs->SaveAs(figdir + ct + ".pdf");
-
-    //Recon with final correction
-    TString figdir_rec = figdir_base + "Recon/";
-    gSystem->mkdir(figdir_rec, true);
-    ct = Form("Canv_%s_FinalCorr", ev.Data());
-    TCanvas* c_corr = new TCanvas(ct, ct, 1600, 1200);
-    {
-      TString key = EventTitle(tgt, ev, "Gen" + trig);
-      TH1* h_gen = (TH1*)hMap[key]->Clone();
-      h_gen->GetYaxis()->SetRangeUser(0, h_gen->GetMaximum()*1.5);
-      h_gen->Draw("hist");
-      TLegend* leg = new TLegend(0.6,0.7,0.9,0.9);
-      leg->SetFillStyle(0);
-      leg->SetBorderSize(0);
-      leg->AddEntry(h_gen, "Gen" + trig, "l");
-      key = EventTitle(tgt, ev, "XiAcpt"+trig);
-      auto h_xiacpt = (TH1*)hMap[key]->Clone();
-      h_xiacpt ->Draw("hist same");
-      key = EventTitle(tgt, ev, "XiRecAcpt"+trig);
-      auto h_xirecacpt = (TH1*)hMap[key]->Clone();
-      h_xirecacpt ->Draw("hist same");
-      key = EventTitle(tgt, ev, "GoodXiCor"+trig);
-      auto h_goodxicor = (TH1*)hMap[key]->Clone();
-      //h_goodxicor->Draw("pe same");
-      key = EventTitle(tgt, ev, "XiAcptCor"+trig);
-      auto h_xiacptcor = (TH1*)hMap[key]->Clone();
-      h_xiacptcor->Draw("pe same");
-      key = EventTitle(tgt, ev, "XiRecAcptCor"+trig);
-      auto h_xirecacptcor = (TH1*)hMap[key]->Clone();
-      h_xirecacptcor->Draw("pe same");
-      leg->AddEntry(h_xiacpt, "XiAcpt"+trig, "l");
-      leg->AddEntry(h_xirecacpt, "XiRecAcpt"+trig, "l");
-      //leg->AddEntry(h_goodxicor, "GoodXiCor", "pe");
-      leg->AddEntry(h_xiacptcor, "XiAcptCor"+trig, "pe");
-      leg->AddEntry(h_xirecacptcor, "XiRecAcptCor"+trig, "pe");
-      leg->Draw();
-    }
-    c_corr->SaveAs(figdir_rec + ct + ".pdf");
-
-    //Recon with final correction and ratio
-    figdir_rec = figdir_base + "Recon_w_rat/";
-    gSystem->mkdir(figdir_rec, true);
-    ct = Form("Canv_%s_FinalCorr_w_rat", ev.Data());
-    TCanvas* c_corr_rat = new TCanvas(ct, ct, 1600, 1200);
-    {
-      TString key = EventTitle(tgt, ev, "Gen" + trig);
-      TH1* h_gen = (TH1*)hMap[key]->Clone();
-      h_gen->GetYaxis()->SetRangeUser(0, h_gen->GetMaximum()*1.5);
-      h_gen->Draw("hist");
-      TLegend* leg = new TLegend(0.6,0.7,0.9,0.9);
-      leg->SetFillStyle(0);
-      leg->SetBorderSize(0);
-      key = EventTitle(tgt, ev, "XiAcpt"+trig);
-      auto h_xiacpt = (TH1*)hMap[key]->Clone();
-      h_xiacpt ->Draw("hist same");
-      key = EventTitle(tgt, ev, "XiRecAcpt"+trig);
-      auto h_xirecacpt = (TH1*)hMap[key]->Clone();
-      h_xirecacpt ->Draw("hist same");
-      key = EventTitle(tgt, ev, "GoodXiCor"+trig);
-      auto h_goodxicor = (TH1*)hMap[key]->Clone();
-      //h_goodxicor->Draw("pe same");
-      key = EventTitle(tgt, ev, "XiAcptCor"+trig);
-      auto h_xiacptcor = (TH1*)hMap[key]->Clone();
-      h_xiacptcor->Draw("pe same");
-      key = EventTitle(tgt, ev, "XiRecAcptCor"+trig);
-      auto h_xirecacptcor = (TH1*)hMap[key]->Clone();
-      h_xirecacptcor->Draw("pe same");
-      auto gr = MakeDivisionGraph(h_xiacptcor, h_gen);
-      gr->SetMarkerColor(kAzure);
-      gr->Draw("PE same");
-      auto grrec = MakeDivisionGraph(h_xirecacptcor, h_gen);
-      grrec->SetMarkerColor(kMagenta);
-      grrec->Draw("PE same");
-      leg->AddEntry(h_gen, "Gen" + trig, "l");
-      leg->AddEntry(h_xiacpt, "XiAcpt"+trig, "l");
-      leg->AddEntry(h_xirecacpt, "XiRecAcpt"+trig, "l");
-      //leg->AddEntry(h_goodxicor, "GoodXiCor", "pe");
-      leg->AddEntry(h_xiacptcor, "XiAcptCor"+trig, "pe");
-      leg->AddEntry(h_xirecacptcor, "XiRecAcptCor"+trig, "pe");
-      leg->AddEntry(gr, "Ratio", "pe");
-      leg->AddEntry(grrec, "Rec Ratio", "pe");
-      leg->Draw();
-      if(ev.Contains("Pol")){
-        double mean_rat_gen =0,std_rat_gen=0, mean_rat_cor=0, std_rat_cor=0;
-        int np = gr->GetN();
-        for(int ip = 0; ip < np; ++ip){
-          double x, y;
-          gr->GetPoint(ip, x, y);
-          mean_rat_gen += y;
-          std_rat_gen += y*y;
-          grrec->GetPoint(ip, x, y);
-          mean_rat_cor += y;
-          std_rat_cor += y*y;
-        }
-        mean_rat_gen /= np;
-        std_rat_gen = sqrt(std_rat_gen/np - mean_rat_gen*mean_rat_gen);
-        mean_rat_cor /= np;
-        std_rat_cor = sqrt(std_rat_cor/np - mean_rat_cor*mean_rat_cor);
-        TLatex* tex = new TLatex();
-        tex->SetNDC();
-        tex->SetTextSize(0.04);
-        tex->SetTextColor(kAzure);
-        tex->DrawLatex(0.2, 0.3, Form("Gen Ratio: %.3f #pm %.5f", mean_rat_gen, std_rat_gen));
-        tex->SetTextColor(kMagenta);
-        tex->DrawLatex(0.2, 0.2, Form("Rec Ratio: %.3f #pm %.5f", mean_rat_cor, std_rat_cor));
-      }
-      out_file->cd();
-      gr->Write(Form("Graph_%s_Corr_w_rat", ev.Data()));
-      grrec->Write(Form("Graph_%s_RecCorr_w_rat", ev.Data()));
-      
-    }
-    c_corr_rat->SaveAs(figdir_rec + ct + ".pdf");
-  }//EventVar
+  }
 }

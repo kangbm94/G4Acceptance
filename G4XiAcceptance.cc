@@ -1,28 +1,42 @@
 #define LooseBin 0
 #define Debug 0
-#define date 260422
+#define date 260617
+#define LVtxIsXi 1
+#define SavePDF 0
 #include "G4XiAcceptance.hh"
 #define Recon 1
 #define CH2 1
+#define PosShift 1
 void G4XiAcceptance(int conf=0){
-
+	gErrorIgnoreLevel = kWarning;
   gStyle -> SetOptStat(0);
 //  double pxi = -0.3;
   double pxi = 0;
   int nfiles = 30;
-	TString WAcc,Target,Conf;
+	TString WAcc,Target,Conf,LVtxConf;
+#if LVtxIsXi
+    LVtxConf = "_LVtxIsXi";
+#endif
   WAcc = "_WB";
 #if CH2
-  TString file_dir = "./rootfiles/Geant4CH2/";
+  TString file_dir = "./rootfiles/Geant4CH2/W_Acc/";
 	Conf = "CH2";
 	Target = "CH2";
 #else
-  TString file_dir = "./rootfiles/Geant4Prod/";
+  TString file_dir = "./rootfiles/Geant4Prod/W_Acc/";
 	Conf = "Prod";
 	Target = "Carbon";
 #endif
+#if PosShift
+#if CH2
+  file_dir = "rootfiles/Geant4CH2/6mmShift/";
+  Conf = "CH26mmShift";
+#else
+  file_dir = "rootfiles/Geant4Prod/6mmShift/";
+  Conf = "Prod6mmShift";
+#endif
+#endif
   //file_dir += "WeightedFermi/";
-  file_dir += "W_Acc/";
   //file_dir += "W_Acc_Rot/";
 	//date = 260402;
 	//date = 260422;//Only pi acceptance
@@ -31,6 +45,13 @@ void G4XiAcceptance(int conf=0){
 //	filename = Form("%d_KpXiMM%s%s_P_%g_%d_GenfitCarbonGeant4Ver4.root",date,Conf.Data(),WAcc.Data(),pxi,0);
 	for(int i=0;i<nfiles;++i){
 		filename = Form("XiRecon%s_P_E42_%d_GenfitCarbonGeant4Ver5.root",Conf.Data(),i);
+#if PosShift
+#if CH2
+		filename = Form("XiReconCH2_P_E42_%d_6mmShifted_GenfitCarbonGeant4Ver5.root",i);
+#else
+		filename = Form("XiReconProd_P_E42_%d_6mmShifted_GenfitCarbonGeant4Ver5.root",i);
+#endif
+#endif
 		cout<<"Loading "<<filename<<endl;
 		tree -> Add(file_dir+filename);
 	}
@@ -47,20 +68,27 @@ void G4XiAcceptance(int conf=0){
     Xi->GetEntry(i);
     FillHist(Xi);
   }
+
+  cout<<"Closing files..."<<endl;
+  cout<<"RunProceed. Making Eff Maps..."<<endl;
   MakeEfficiencies();
+  cout<<"Maps made"<<endl;
 
   int ic=0;
   TFile* fileOut;
   TString fout_dir = "./Maps/";
 #if Recon
-	figdir = Form("./figs_%d/AcceptanceHists/ReconPol_%s%s/", date,Target.Data(),WAcc.Data());
+	figdir = Form("./Maps_%d/AcceptanceHists/ReconPol_%s%s%s/", date,Conf.Data(),LVtxConf.Data(),WAcc.Data());
 #else
-  figdir = Form("./figs_%d/AcceptanceHists/MissPol_%s%s/", date,Target.Data(),WAcc.Data());
+  figdir = Form("./Maps_%d/AcceptanceHists/MissPol_%s%s/", date,Target.Data(),WAcc.Data());
 #endif
-  TString fout_name = Form("%s_MM_%s_%d.root",Target.Data() ,WAcc.Data(),date);
+  TString fout_name = Form("%s_MM_%s%s_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
 #if Recon
-	fout_name = Form("%s_ReconPE42_%s_%d.root",Target.Data() ,WAcc.Data(),date);
+	fout_name = Form("%s_ReconPE42_%s%s_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
 #else
+#endif
+#if PosShift
+  fout_name = Form("%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
 #endif
 #if LooseBin
   fout_name = fout_name.ReplaceAll(".root","_LooseBin.root");
@@ -75,31 +103,40 @@ void G4XiAcceptance(int conf=0){
   for(auto hist:hMap){
     TCanvas* c = new TCanvas(Form("c%d", ic), Form("c%d", ic), 800, 800);
     hist.second -> Draw("col");
-    c -> SaveAs(figdir + hist.second -> GetName() + TString(".pdf"));
+    if(SavePDF) c -> SaveAs(figdir + hist.second -> GetName() + TString(".pdf"));
     ic++;
     hist.second -> Write();
   }
+  cout<<"1D hists done"<<endl;
   for(auto hist:hMap2D){
     TCanvas* c = new TCanvas(Form("c%d", ic), Form("c%d", ic), 800, 800);
     hist.second -> Draw("col");
     TString fig2d = "2D/";
-    c -> SaveAs(figdir + fig2d + hist.second -> GetName() + TString(".pdf"));
+    if(SavePDF) c -> SaveAs(figdir + fig2d + hist.second -> GetName() + TString(".pdf"));
     ic++;
     hist.second -> Write();
   }
+  cout<<"2D hists done"<<endl;
   for(auto eff:effMap){
     TCanvas* c = new TCanvas(Form("c%d", ic), Form("c%d", ic), 800, 800);
     eff.second -> Draw("colz");
-    c -> SaveAs(figdir + eff.second -> GetName() + TString(".pdf"));
+    if(SavePDF) c -> SaveAs(figdir + eff.second -> GetName() + TString(".pdf"));
     ic++;
     eff.second -> Write();
   }
+  cout<<"1D effs done"<<endl;
   for(auto eff:effMap){
     TCanvas* c = new TCanvas(Form("c%d", ic), Form("c%d", ic), 800, 800);
     eff.second -> Draw("colz");
     TString fig2d = "2D/";
-    c -> SaveAs(figdir + fig2d + eff.second -> GetName() + TString(".pdf"));
+    if(SavePDF) c -> SaveAs(figdir + fig2d + eff.second -> GetName() + TString(".pdf"));
     ic++;
     eff.second -> Write();
   }
+  cout<<"2D effs done"<<endl;
+  cout<<"All hists and effs written to file "<< fout_name << endl;
+  fileOut->Write();
+  cout<<"All done. Closing file."<<endl;
+  fileOut->Close();
+  exit(0);
 }

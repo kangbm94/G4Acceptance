@@ -1,5 +1,6 @@
 #include "Include/g4genfitcarbon.h"
 #include "Include/XiEfficiency.hh"
+#include "Include/PolarizationAnal.hh"
 using namespace std;
 //#include "G4PolaBranches.hh"
 double thr_weight = 20; // cut under 5%
@@ -18,8 +19,10 @@ int nbinBE = 50;
 double minBE = -100, maxBE = 800;
 
 int nbinDistT = 30;
-double minDistT = 0, maxDistT = 350;
-
+nbinDistT = 30;//After 260521
+//double minDistT = 0, maxDistT = 350;
+double minDistT = 0, maxDistT = 250;//After 260521
+double minDistTXi = 0, maxDistTXi = 100;//After 260521
 int nbinTrackLen = 30;
 int nbinTrackLen2D = 30;
 double minTrackLen = 0, maxTrackLen = 300;
@@ -88,6 +91,10 @@ TString SetAxis(TString part, TString var, int& bin, double& min, double& max){
   else if(var == "DistT"){
     axis = "Distance from target [mm]";
     bin = nbinDistT; min = minDistT; max = maxDistT;
+    if(part.Contains("Pi2") or part.Contains("Xi") or (LVtxIsXi and part.Contains("L"))){
+      //bin = nbinMom; min = minMomL; max = maxMomL;After 260521
+      bin = nbinDistT; min = minDistTXi; max = maxDistTXi;
+    }
   }
   else if(var == "CosPsi"){
     axis = "cos#Psi";
@@ -196,7 +203,11 @@ void FillHist(T* XiEv){
     {"P",{G4P,G4Pi1,G4DecayVtxL}},
     {"Pi1",{G4Pi1,G4P,G4DecayVtxL}},
     {"Pi2",{G4Pi2,G4L,G4DecayVtxXi}},
+    #if LVtxIsXi
+    {"L",{G4L,G4Pi1,G4DecayVtxXi}},
+    #else
     {"L",{G4L,G4Pi1,G4DecayVtxL}},
+    #endif
     {"Xi",{G4Xi,G4Pi2,G4DecayVtxXi}},
   };
   for(auto t:triggers){
@@ -302,6 +313,9 @@ SetBranches(TTree* tree){
 	tree->SetBranchStatus("G4pi2vtx_x",1);
 	tree->SetBranchStatus("G4pi2vtx_y",1);
 	tree->SetBranchStatus("G4pi2vtx_z",1);
+	tree->SetBranchStatus("G4xivtx_x",1);
+	tree->SetBranchStatus("G4xivtx_y",1);
+	tree->SetBranchStatus("G4xivtx_z",1);
 
 	tree->SetBranchStatus("lgood",1);
 	tree->SetBranchStatus("xigood",1);
@@ -312,5 +326,24 @@ SetBranches(TTree* tree){
   tree->SetBranchStatus("p_tracked",1);
   tree->SetBranchStatus("pi1_tracked",1);
   tree->SetBranchStatus("pi2_tracked",1);
+
+  tree->SetBranchStatus("KFXiDecaysMom_x",1);
+  tree->SetBranchStatus("KFXiDecaysMom_y",1);
+  tree->SetBranchStatus("KFXiDecaysMom_z",1);
+  tree->SetBranchStatus("KFLambdaMom_x",1);
+  tree->SetBranchStatus("KFLambdaMom_y",1);
+  tree->SetBranchStatus("KFLambdaMom_z",1);
+  tree->SetBranchStatus("KFXiMom_x",1);
+  tree->SetBranchStatus("KFXiMom_y",1);
+  tree->SetBranchStatus("KFXiMom_z",1);
+  tree->SetBranchStatus("GFLambdaDecayVtx_x",1);
+  tree->SetBranchStatus("GFLambdaDecayVtx_y",1);
+  tree->SetBranchStatus("GFLambdaDecayVtx_z",1);
+  tree->SetBranchStatus("GFXiDecayVtx_x",1);
+  tree->SetBranchStatus("GFXiDecayVtx_y",1);
+  tree->SetBranchStatus("GFXiDecayVtx_z",1);
+  tree->SetBranchStatus("KFXiProductionVtx_x",1);
+  tree->SetBranchStatus("KFXiProductionVtx_y",1);
+  tree->SetBranchStatus("KFXiProductionVtx_z",1);
 
 }

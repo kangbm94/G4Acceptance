@@ -1,7 +1,13 @@
 #ifndef XiEfficiency_hh
 #define XiEfficiency_hh
 #include "Dir.hh"
+#if date <= 260521
 vector<double> VertDistances = {0, 15, 30, 45, 60, 90, 120, 150, 250, 400};
+#elif date <= 260608
+vector<double> VertDistances = {0, 14, 23, 33, 42, 52, 61, 71, 80, 90, 99, 110, 135, 160, 185, 210, 250, 400};
+#else
+vector<double> VertDistances = {0, 23, 42, 61, 80, 99, 120, 145, 171, 196, 222, 250, 400};
+#endif
 vector<TString> particle = {"P", "Pi1", "Pi2" , "L", "Xi"};
 vector<TString> variable = {"CosTh", "Mom", "Ph", "DistT", "CosPsi", "CosOpen"};
 vector<TString> suffix = {"Gen",
@@ -9,7 +15,8 @@ vector<TString> suffix = {"Gen",
     "XiAcpt", "PTracked", "Pi1Tracked", "Pi2Tracked",
     "PPi1Tracked","AllTracked", "GoodLAndPi2Tracked"
 };
-vector<TString> triggers = {"", "TrigB"};
+//vector<TString> triggers = {"", "TrigB"};
+vector<TString> triggers = {""};
 struct CorrectionParameter{
     TString num, den;
     TString p_cor;
