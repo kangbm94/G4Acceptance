@@ -1,3 +1,9 @@
-sleep 3600
-root -b -q G4XiAcceptance.cc
+#sleep 3600
+for i in {0..29}
+do
+  for frac in {1..10}
+  do
+    bsub -q p -n 2 root -b -q 'G4XiAcceptanceCheck.cc('$i','$frac',10)'
+  done
+done
 #bsub -q a root -b -q G4XiAcceptanceCheckCH2.cc

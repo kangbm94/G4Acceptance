@@ -105,8 +105,15 @@ TString SetEventVarAxis(TString var, int &nbinx, double &minx, double &maxx){
 		};
 #else
 		CorrPars = {
-            {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
-            {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom"}},
+ //           {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
+ //           {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom"}},
+ //           {"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
+ //           {"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
+ //           {"PTracked", "Gen", "P", {"Mom"}}
+		};
+		CorrPars = {
+            {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"Ph","CosOpen"}},
+            {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"CosTh","Ph"}},
             {"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
             {"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
             {"PTracked", "Gen", "P", {"Mom"}}
@@ -253,6 +260,93 @@ void InitializeCorrectionHistograms(TString tgt){
         hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
     }
 };
+void LoadOrAddHistogram(TString key, TFile* file){
+    if(hMap.find(key) == hMap.end()){
+        hMap[key] = (TH1*)file->Get(key);
+        hMap[key] -> SetLineColor(colorMap[key]);
+    }
+    else{
+        hMap[key] ->Add((TH1*)file->Get(key));
+    }
+}
+void LoadCorrectionHistograms(TFile* file,TString tgt){
+    for(auto cp:CorrPars){
+        TString num = cp.num;
+        TString den = cp.den;
+        bool num_acpt = 0, den_acpt = 0;
+        for(auto chk:CheckLists){
+            if(chk == num) num_acpt = 1;
+            if(chk == den) den_acpt = 1;
+        }
+        if(!num_acpt) CheckLists.push_back(num);
+        if(!den_acpt) CheckLists.push_back(den);
+    }
+    for(auto chk:CheckLists){
+        cout<<"CheckList: "<<chk<<endl;
+    }
+    for(auto chk: CheckLists){
+        for(auto p:particle){
+            for(int iv=0;iv<variable.size();++iv){
+                auto v = variable[iv];
+                TString key = AcceptanceHistTitle1D(tgt, p, v, chk);
+                LoadOrAddHistogram(key, file);
+    for(auto cp:CorrPars){
+        TString num = cp.num;
+        if(num != chk) continue;
+        TString den = cp.den;
+        TString pc = cp.p_cor;
+        for(int iv1 = 0; iv1 < variable.size();++iv1){
+            auto v1 = variable[iv1];
+            key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1);
+            LoadOrAddHistogram(key, file);
+            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
+                auto v2 = variable[iv2];
+                key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1, v2);
+                LoadOrAddHistogram(key, file);
+            }//iv2
+        }//iv1
+    }//cp
+            }//iv
+        }//particle
+        for(auto ev: EventVars){
+            TString key = EventTitle(tgt, ev, chk);
+            LoadOrAddHistogram(key, file);
+    for(auto cp:CorrPars){
+        TString num = cp.num;
+        if(num != chk) continue;
+        TString den = cp.den;
+        TString pc = cp.p_cor;
+        for(int iv1 = 0; iv1 < variable.size();++iv1){
+            auto v1 = variable[iv1];
+            key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1);
+            LoadOrAddHistogram(key, file);
+            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
+                auto v2 = variable[iv2];
+                key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1, v2);
+                LoadOrAddHistogram(key, file);
+            }//iv2
+        }//iv1
+    }//cp
+        }//ev
+    }//CheckLists
+    vector<TString> XiAcptHists = {
+        "XiAcpt"+trig, "XiAcptCor"+trig, "GoodXiCor"+trig,
+        "XiRecAcpt"+trig, "XiRecAcptCor"+trig
+    };
+    for(auto xiconf: XiAcptHists){
+        for(auto p:particle){
+            for(int iv=0;iv<variable.size();++iv){
+                auto v = variable[iv];
+                TString key = AcceptanceHistTitle1D(tgt, p, v, xiconf);
+                LoadOrAddHistogram(key, file);
+            }
+        }
+        for(auto ev: EventVars){
+            TString key = EventTitle(tgt, ev, xiconf);
+            LoadOrAddHistogram(key, file);
+        }
+    }
+}
 class Event{
     private:
         g4genfitcarbon* gf;
@@ -871,3 +965,5 @@ bool FileCheck(TString filename){
     return val;
 
 }
+
+void CheckAcceptance(vector<TFile*> files);

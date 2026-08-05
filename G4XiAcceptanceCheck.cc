@@ -4,48 +4,61 @@
 #define TrigB 0
 #define Recon 1
 #define CH2 0
-#define date 260730
+#define date 260805
 #define PosShift 1
 #include "G4XiAcceptanceCheck.hh"
 #include <TCanvas.h>
-void G4XiAcceptanceCheck(){
-  SetStyle();
-  double pxi = 0;
-	TString WAcc,Target,Conf,LVtxConf;
-  WAcc = "_WB";
-#if LVtxIsXi
-    LVtxConf = "_LVtxIsXi";
-#endif
-  int nfile = 30;
-  bool test_run = 0;
-  if(test_run) nfile = 1;
-#if CH2
-  TString file_dir = "./rootfiles/Geant4CH2/";
-  Conf = "CH2";
-  Target = "CH2";
-#if PosShift
-  file_dir = "rootfiles/Geant4CH2/6mmShift/";
-  Conf = "CH26mmShift";
-#endif
-#else
-  TString file_dir = "./rootfiles/Geant4Prod/W_Acc/";
-  Conf = "Prod";
-  Target = "Carbon";
-#if PosShift
-  file_dir = "rootfiles/Geant4Prod/6mmShift/";
-  Conf = "Prod6mmShift";
-#endif
-#endif
-  //file_dir += "WeightedFermi/";
-  TString filename, figdir;
-  TString tgt = "Carbon";
+TString WAcc,Target,Conf,LVtxConf,filename,figdir_base,file_dir;
+TString tgt = "Carbon";
+bool test_run = 0;
 #if CH2
   tgt = "CH2";
 #endif
+void G4XiAcceptanceCheck(){
+  cout<<"Setting configurations..."<<endl;
+  WAcc = "_WB";
+  figdir_base = Form("figs_%d/%s/", date,tgt.Data());
+  if(TrigB){
+    figdir_base.ReplaceAll("figs","figs_TrigB");
+  }
+#if PerXiDist
+    figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
+#endif
+#if PerDist
+    figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
+#endif
+#if CH2
+    file_dir = "./rootfiles/Geant4CH2/";
+    Conf = "CH2";
+    Target = "CH2";
+  #if PosShift
+    file_dir = "rootfiles/Geant4CH2/6mmShift/";
+    Conf = "CH26mmShift";
+  #endif
+  #else
+    file_dir = "./rootfiles/Geant4Prod/W_Acc/";
+    Conf = "Prod";
+    Target = "Carbon";
+  #if PosShift
+    file_dir = "rootfiles/Geant4Prod/6mmShift/";
+    Conf = "Prod6mmShift";
+  #endif
+#endif
+#if PosShift
+    figdir_base.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
+#endif
+  if(test_run) figdir_base.ReplaceAll(tgt,tgt + "_testrun");
+#if LVtxIsXi
+  LVtxConf = "_LVtxIsXi";
+  figdir_base.ReplaceAll(tgt.Data(),(tgt + LVtxConf ).Data());
+#endif
+}
+
+void G4XiAcceptanceCheck(int i, int frac, int ndiv){
+  if(file_dir == "") G4XiAcceptanceCheck();
+  SetStyle();
   TChain* tree = new TChain("tpc");
   cout<<"Loading files..."<<endl;
-  bool file_check = 1;
-  for(int i=0;i<nfile;++i){
 #if CH2
     filename = Form("XiReconCH2_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
 	#if PosShift
@@ -57,18 +70,8 @@ void G4XiAcceptanceCheck(){
 		filename = Form("XiReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
 	#endif
 #endif
-    cout<<"Loading "<<filename<<endl;
-    if(FileCheck(file_dir+filename) == 0){
-      continue;
-      file_check = 0;
-    }
-    if(tree -> Add(file_dir+filename) != 1){
-      cout<<"Error adding file "<<filename<<endl;
-      file_check = 0;
-    }
-  }
-  if(file_check == 0){
-    cout<<"Error loading files. Exiting..."<<endl;
+  if(FileCheck(file_dir+filename) == 0){
+    cout<<"File "<<filename<<" not found. Exiting..."<<endl;
     return;
   }
   cout<<"Accpt file"<<endl;
@@ -87,50 +90,48 @@ void G4XiAcceptanceCheck(){
     acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0_WB_6mmShifted_%d.root",260726));
   #endif
 #endif
-  cout<<Form("Run Target: %s, Date: %d", tgt.Data(), date)<<endl;
+  cout<<Form("Run %d, Target: %s, Date: %d", i,tgt.Data(), date)<<endl;
   InitializeTriggerCondtions();
   g4genfitcarbon* Xi = new g4genfitcarbon(tree);
+  tree->Add(file_dir+filename);
   SetBranches(tree);
   InitializeCorrectionHistograms( tgt );
   LoadEfficiencies(acpt_file, tgt);
   auto ent = tree->GetEntries();
   cout<<"Entries : "<<ent<<endl;
   if(test_run) ent = ent / 10;
-  for(auto i = 0;i<ent;i++){
+  int start = 0,last = ent;
+  if(ndiv != 1){
+    int part = (ent / ndiv);
+    start = part * (frac - 1);
+    last = part * frac;
+    if(frac == ndiv) last = ent;
+  }
+  for(auto i = start;i<ent;i++){
     if(i%1000==0) cout << i << endl;
     Xi->GetEntry(i);
     FillHistograms(Xi, tgt);
   }
-  MakeChi2Map(tgt);
-  NormalizeHistograms(tgt);
-  TString figdir_base = Form("figs_%d/%s/", date,tgt.Data());
-  if(TrigB){
-    figdir_base.ReplaceAll("figs","figs_TrigB");
-  }
-#if PerXiDist
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
-#endif
-#if PerDist
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
-#endif
-#if PosShift
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
-#endif
-  if(test_run) figdir_base.ReplaceAll(tgt,tgt + "_testrun");
-#if CH2
-#else
-  //figdir_base.ReplaceAll(tgt,tgt+ "ForcedPi2Ph");
-#endif
-#if LVtxIsXi
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_LVtxIsXi").Data());
-#endif
   gSystem->mkdir(figdir_base, true);
-  TFile* out_file = TFile::Open(figdir_base + "AcceptanceCorrectionMaps.root", "RECREATE");
+  TFile* out_file = TFile::Open(Form("%srootfiles/CorrectedHistograms_%d_%d_%d.root", figdir_base.Data(), i, frac, ndiv), "RECREATE");
   out_file->cd();
   for(auto& [key, hist]: hMap){
     hist->Write();
   }
   out_file->Write();
+
+}
+void G4XiAcceptanceCheck(int i){
+  G4XiAcceptanceCheck(i, 1, 1);
+}
+void CheckAcceptance(vector<TFile*> files){
+  SetStyle();
+  for(auto file: files){
+    LoadCorrectionHistograms(file, tgt);
+  }
+  MakeChi2Map(tgt);
+  NormalizeHistograms(tgt);
+  TFile* out_file = TFile::Open(figdir_base + "CorrectionResults.root", "RECREATE");
   for(auto p:particle){
     //Each step by gen
     TString figdir = figdir_base  + "/StepByGen/";
@@ -579,4 +580,121 @@ void G4XiAcceptanceCheck(){
     }
     c_corr_rat->SaveAs(figdir_rec + ct + ".pdf");
   }//EventVar
+  out_file->cd();
+  for(auto& [key, hist]: hMap){
+    hist->Write(); 
+  }
+  out_file->Write();
+}
+void CheckAcceptanceAll(){
+  SetStyle();
+  int nfile = 30;
+  int ndiv = 10;
+  if(test_run) nfile = 1;
+  vector<TFile*> files;
+  for(int i=0;i<nfile;++i){
+    for(int frac = 1; frac <= ndiv; ++frac){
+    TFile* file = TFile::Open(Form("%srootfiles/CorrectedHistograms_%d_%d_%d.root", figdir_base.Data(), i, frac, ndiv));
+    files.push_back(file);
+    }
+  }
+  CheckAcceptance(files);
+}
+void G4XiAcceptanceCheckAll(){
+  SetStyle();
+  double pxi = 0;
+  int nfile = 30;
+  int n_div = 10;
+  bool test_run = 0;
+  if(test_run) nfile = 1;
+  TChain* tree = new TChain("tpc");
+  cout<<"Loading files..."<<endl;
+  bool file_check = 1;
+  for(int i=0;i<nfile;++i){
+#if CH2
+    filename = Form("XiReconCH2_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
+	#if PosShift
+		filename = Form("XiReconCH2_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
+	#endif
+#else
+    filename = Form("XiReconProd_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
+	#if PosShift
+		filename = Form("XiReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
+	#endif
+#endif
+    cout<<"Loading "<<filename<<endl;
+    if(FileCheck(file_dir+filename) == 0){
+      continue;
+      file_check = 0;
+    }
+    if(tree -> Add(file_dir+filename) != 1){
+      cout<<"Error adding file "<<filename<<endl;
+      file_check = 0;
+    }
+  }
+  if(file_check == 0){
+    cout<<"Error loading files. Exiting..."<<endl;
+    return;
+  }
+  cout<<"Accpt file"<<endl;
+#if CH2
+  TFile* acpt_file;
+  #if LVtxIsXi
+    acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260729));
+  #else
+    acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
+  #endif
+#else
+  TFile* acpt_file;
+  #if LVtxIsXi
+    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260726));
+  #else
+    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0_WB_6mmShifted_%d.root",260726));
+  #endif
+#endif
+  cout<<Form("Run Target: %s, Date: %d", tgt.Data(), date)<<endl;
+  InitializeTriggerCondtions();
+  g4genfitcarbon* Xi = new g4genfitcarbon(tree);
+  SetBranches(tree);
+  InitializeCorrectionHistograms( tgt );
+  LoadEfficiencies(acpt_file, tgt);
+  auto ent = tree->GetEntries();
+  cout<<"Entries : "<<ent<<endl;
+  if(test_run) ent = ent / 10;
+  for(auto i = 0;i<ent;i++){
+    if(i%1000==0) cout << i << endl;
+    Xi->GetEntry(i);
+    FillHistograms(Xi, tgt);
+  }
+  TString figdir_base = Form("figs_%d/%s/", date,tgt.Data());
+  if(TrigB){
+    figdir_base.ReplaceAll("figs","figs_TrigB");
+  }
+#if PerXiDist
+  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
+#endif
+#if PerDist
+  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
+#endif
+#if PosShift
+  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
+#endif
+  if(test_run) figdir_base.ReplaceAll(tgt,tgt + "_testrun");
+#if CH2
+#else
+  //figdir_base.ReplaceAll(tgt,tgt+ "ForcedPi2Ph");
+#endif
+#if LVtxIsXi
+  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_LVtxIsXi").Data());
+#endif
+  gSystem->mkdir(figdir_base, true);
+  TFile* out_file = TFile::Open(figdir_base + "rootfiles/AcceptanceCorrectionMaps.root", "RECREATE");
+  out_file->cd();
+  for(auto& [key, hist]: hMap){
+    hist->Write();
+  }
+  out_file->Write();
+  vector<TFile*> files;
+  files.push_back(out_file);
+  CheckAcceptance(files);
 }
