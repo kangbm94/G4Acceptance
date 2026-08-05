@@ -152,6 +152,54 @@ void InitializeHistograms(){
   }//suffix
   }//trigger
 }
+void LoadOrAdd1DHistogram(TString key, TFile* file){
+    if(hMap.find(key) == hMap.end()){
+        hMap[key] = (TH1*)file->Get(key);
+    }
+    else{
+        hMap[key] ->Add((TH1*)file->Get(key));
+    }
+}
+void LoadOrAdd2DHistogram(TString key, TFile* file){
+    if(hMap2D.find(key) == hMap2D.end()){
+        hMap2D[key] = (TH2*)file->Get(key);
+    }
+    else{
+        hMap2D[key] ->Add((TH2*)file->Get(key));
+    }
+}
+void LoadHistograms(TFile* file){
+
+  for(auto t:triggers){
+  for(auto s:suffix){
+    s = s + t;
+    for(auto p:particle){
+      for(int iv1=0;iv1<variable.size();++iv1){
+        auto v1 = variable[iv1];
+        TString key = AcceptanceHistTitle1D("G4", p, v1, s);
+#if Debug
+        cout<<"Loading "<<key<<endl;
+#endif
+
+  LoadOrAdd1DHistogram(key, file);
+	for(int iv2=iv1+1;iv2<variable.size();++iv2){
+	  auto v2 = variable[iv2];
+	  key = AcceptanceHistTitle2D("G4", p, v1, v2, s);
+#if Debug
+	  cout<<"Loading "<<key<<endl;
+#endif
+	  LoadOrAdd2DHistogram(key, file);
+    for(int id = 0; id < ndist-1;++id){
+      if(v1 == "DistT" or v2 == "DistT") continue;
+      TString distkey = key + GetDistKey(id);
+      LoadOrAdd2DHistogram(distkey, file);
+    }
+        }//variable_2D
+      }//variable_1D
+    }//particle
+  }//suffix
+  }//trigger
+}
 
 void FillParticle(TVector3 P1, TVector3 P2, TVector3 V, TString pre, TString part, TString suff){
   double var; 

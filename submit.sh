@@ -3,7 +3,7 @@ for i in {0..29}
 do
   for frac in {1..10}
   do
-    bsub -q p -n 2 root -b -q 'G4XiAcceptanceCheck.cc('$i','$frac',10)'
+    bsub -q s root -b -q 'G4XiAcceptanceCheck.cc('$i','$frac',10)'
   done
 done
 #bsub -q a root -b -q G4XiAcceptanceCheckCH2.cc

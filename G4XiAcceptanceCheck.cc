@@ -107,24 +107,27 @@ void G4XiAcceptanceCheck(int i, int frac, int ndiv){
     last = part * frac;
     if(frac == ndiv) last = ent;
   }
-  for(auto i = start;i<ent;i++){
+  for(auto i = start;i<last;i++){
     if(i%1000==0) cout << i << endl;
     Xi->GetEntry(i);
     FillHistograms(Xi, tgt);
   }
   gSystem->mkdir(figdir_base, true);
+  gSystem->mkdir(figdir_base + "rootfiles/", true);
   TFile* out_file = TFile::Open(Form("%srootfiles/CorrectedHistograms_%d_%d_%d.root", figdir_base.Data(), i, frac, ndiv), "RECREATE");
   out_file->cd();
   for(auto& [key, hist]: hMap){
     hist->Write();
   }
   out_file->Write();
+  out_file->Close();
 
 }
 void G4XiAcceptanceCheck(int i){
   G4XiAcceptanceCheck(i, 1, 1);
 }
 void CheckAcceptance(vector<TFile*> files){
+  if(figdir_base == "") G4XiAcceptanceCheck();
   SetStyle();
   for(auto file: files){
     LoadCorrectionHistograms(file, tgt);
@@ -585,8 +588,10 @@ void CheckAcceptance(vector<TFile*> files){
     hist->Write(); 
   }
   out_file->Write();
+  out_file->Close();
 }
 void CheckAcceptanceAll(){
+  if(figdir_base == "") G4XiAcceptanceCheck();
   SetStyle();
   int nfile = 30;
   int ndiv = 10;
@@ -594,17 +599,17 @@ void CheckAcceptanceAll(){
   vector<TFile*> files;
   for(int i=0;i<nfile;++i){
     for(int frac = 1; frac <= ndiv; ++frac){
-    TFile* file = TFile::Open(Form("%srootfiles/CorrectedHistograms_%d_%d_%d.root", figdir_base.Data(), i, frac, ndiv));
-    files.push_back(file);
+      TFile* file = TFile::Open(Form("%srootfiles/CorrectedHistograms_%d_%d_%d.root", figdir_base.Data(), i, frac, ndiv));
+      files.push_back(file);
     }
   }
   CheckAcceptance(files);
 }
 void G4XiAcceptanceCheckAll(){
+  if(figdir_base == "")G4XiAcceptanceCheck();
   SetStyle();
   double pxi = 0;
   int nfile = 30;
-  int n_div = 10;
   bool test_run = 0;
   if(test_run) nfile = 1;
   TChain* tree = new TChain("tpc");
@@ -624,8 +629,8 @@ void G4XiAcceptanceCheckAll(){
 #endif
     cout<<"Loading "<<filename<<endl;
     if(FileCheck(file_dir+filename) == 0){
-      continue;
       file_check = 0;
+      continue;
     }
     if(tree -> Add(file_dir+filename) != 1){
       cout<<"Error adding file "<<filename<<endl;
@@ -688,6 +693,7 @@ void G4XiAcceptanceCheckAll(){
   figdir_base.ReplaceAll(tgt.Data(),(tgt +"_LVtxIsXi").Data());
 #endif
   gSystem->mkdir(figdir_base, true);
+  gSystem->mkdir(figdir_base + "rootfiles/", true);
   TFile* out_file = TFile::Open(figdir_base + "rootfiles/AcceptanceCorrectionMaps.root", "RECREATE");
   out_file->cd();
   for(auto& [key, hist]: hMap){
