@@ -3,7 +3,7 @@
 #define LVtxIsXi 1
 #define TrigB 0
 #define Recon 1
-#define CH2 0
+#define CH2 1
 #define date 260730
 #define PosShift 1
 #include "G4XiAcceptanceCheck.hh"
@@ -44,7 +44,6 @@ void G4XiAcceptanceCheck(){
 #endif
   TChain* tree = new TChain("tpc");
   cout<<"Loading files..."<<endl;
-  bool file_check = 1;
   for(int i=0;i<nfile;++i){
 #if CH2
     filename = Form("XiReconCH2_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
@@ -58,34 +57,48 @@ void G4XiAcceptanceCheck(){
 	#endif
 #endif
     cout<<"Loading "<<filename<<endl;
-    if(FileCheck(file_dir+filename) == 0){
-      continue;
-      file_check = 0;
-    }
-    if(tree -> Add(file_dir+filename) != 1){
-      cout<<"Error adding file "<<filename<<endl;
-      file_check = 0;
-    }
-  }
-  if(file_check == 0){
-    cout<<"Error loading files. Exiting..."<<endl;
-    return;
+    tree -> Add(file_dir+filename);
   }
   cout<<"Accpt file"<<endl;
 #if CH2
-  TFile* acpt_file;
+  TFile* acpt_file = TFile::Open("./Maps/CH2_ReconPE42__WB_260327.root");
+  if(date == 260422){
+    cout<<"Modifying date to "<<Form("%d",date)<<endl;
+    acpt_file = TFile::Open("./Maps/CH2_ReconPE42__WB_260422.root");
+  }
+  if(date >= 260521){
+    cout<<"Modifying date to "<<Form("%d",date)<<endl;
+    acpt_file = TFile::Open("./Maps/CH2_ReconPE42__WB_260521.root");
+  }
+  if(date >= 260523){
+    cout<<"Modifying date to "<<Form("%d",date)<<endl;
   #if LVtxIsXi
-    acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260729));
+    acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
   #else
     acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
   #endif
+  }
+  acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260729));
 #else
-  TFile* acpt_file;
+  TFile* acpt_file = TFile::Open("./Maps/Carbon_ReconPE42__WB_260327.root");
+  if(date == 260422){
+    acpt_file = TFile::Open("./Maps/Carbon_ReconPE42__WB_260422.root");
+  }
+  if(date >= 260521){
+    cout<<"Modifying date to "<<Form("%d",date)<<endl;
+    acpt_file = TFile::Open("./Maps/Carbon_ReconPE42__WB_260521.root");
+  }
+  if(date >= 260523){
+    cout<<"Modifying date to "<<Form("%d",date)<<endl;
   #if LVtxIsXi
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260726));
+    //acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260609));
+    //acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260726));
+    acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260729));
   #else
+    //acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date));
     acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0_WB_6mmShifted_%d.root",260726));
   #endif
+  }
 #endif
   cout<<Form("Run Target: %s, Date: %d", tgt.Data(), date)<<endl;
   InitializeTriggerCondtions();
@@ -93,10 +106,10 @@ void G4XiAcceptanceCheck(){
   SetBranches(tree);
   InitializeCorrectionHistograms( tgt );
   LoadEfficiencies(acpt_file, tgt);
-  auto ent = tree->GetEntries();
+  int ent = tree->GetEntries();
   cout<<"Entries : "<<ent<<endl;
   if(test_run) ent = ent / 10;
-  for(auto i = 0;i<ent;i++){
+  for(int i = 0;i<ent;i++){
     if(i%1000==0) cout << i << endl;
     Xi->GetEntry(i);
     FillHistograms(Xi, tgt);
@@ -554,11 +567,6 @@ void G4XiAcceptanceCheck(){
           grrec->GetPoint(ip, x, y);
           mean_rat_cor += y;
           std_rat_cor += y*y;
-        }
-        if(np == 0){
-          cout<<"No points in graph for "<<ev<<endl;
-          np = 1;
-          //Null results will still be recored.
         }
         mean_rat_gen /= np;
         std_rat_gen = sqrt(std_rat_gen/np - mean_rat_gen*mean_rat_gen);

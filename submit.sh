@@ -1,4 +1,3 @@
-#sleep 18000
+sleep 3600
 root -b -q G4XiAcceptance.cc
-root -b -q G4XiAcceptanceCheck.cc
 #bsub -q a root -b -q G4XiAcceptanceCheckCH2.cc

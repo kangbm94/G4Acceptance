@@ -91,8 +91,8 @@ TString SetEventVarAxis(TString var, int &nbinx, double &minx, double &maxx){
 		*/
 		CorrPars = {
 		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
-		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
-		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
+		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"CosTh", "Ph"}},
+		{"GoodL", "PPi1Tracked", "L", {"CosPsi","CosOpen"}},
 		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
 		{"PTracked", "Gen", "P", {"CosTh", "Mom"}}
 		};
@@ -104,40 +104,12 @@ TString SetEventVarAxis(TString var, int &nbinx, double &minx, double &maxx){
 			{"GoodL", "Gen", "Pi1", {"CosTh","Ph"}}
 		};
 #else
-/*
 		CorrPars = {
-		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"Mom","CosOpen"}},
-		//{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
-		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "Ph"}},
-		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
-		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
-		{"PTracked", "Gen", "P", {"CosTh","Mom"}}
-		};
-		*/
-/*
-		CorrPars = {
-		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
-		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
-		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
-		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
-		{"PTracked", "Gen", "P", {"CosTh","Mom"}}
-		};
-		*/
-/*
-		CorrPars = {
-		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
-		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom"}},
-		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
-		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
-		{"PTracked", "Gen", "P", {"Mom"}}
-		};
-*/
-		CorrPars = {
-		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
-		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom","Ph"}},
-		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
-		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
-		{"PTracked", "Gen", "P", {"Mom"}}
+            {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
+            {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom"}},
+            {"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
+            {"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
+            {"PTracked", "Gen", "P", {"Mom"}}
 		};
 #endif
 #endif
@@ -561,7 +533,9 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
                 }
                 w = event.GetWeight(pc, num, den, v1);
                 key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1);
-                hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1], DC[p][2], v), w);
+                if(w < weight_th and !isnan(w)){
+                    hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1], DC[p][2], v), w);
+                }
                 for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
                     auto v2 = variable[iv2];
                     if(pc == "P" or pc == "Pi1" or pc == "Pi2"){
@@ -569,7 +543,9 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
                     }
                     w = event.GetWeight(pc, num, den, v1, v2);
                     key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1, v2);
-                    hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1], DC[p][2], v), w);
+                    if(w < weight_th and !isnan(w)){
+                        hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1], DC[p][2], v), w);
+                    }
                 }
             }
         }
@@ -588,7 +564,9 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
             }
             if(SuffixCheck("GoodXi", gf)){
                 key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor" + trig);
-                hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v), weight);
+                if(weightRec < weight_th and !isnan(weightRec)){
+                    hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v), weight);
+                }
             }
         }//iv
     }//particle
@@ -608,7 +586,9 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
                 TString v2 = var_cor.size() > 1 ? var_cor[1] : "";
                 w = event.GetWeight(pc, num, den, v1, v2);
                 key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1, v2);
-                hMap[key]->Fill(event.GetEventVariable(ev), w);
+                if(w < weight_th and !isnan(w)){
+                    hMap[key]->Fill(event.GetEventVariable(ev), w);
+                }
             }
         }
         if(SuffixCheck("XiAcpt", gf)){
@@ -625,7 +605,9 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
         }
         if(SuffixCheck("GoodXi", gf)){
             key = EventTitle(tgt, ev, "GoodXiCor" + trig);
-            hMap[key]->Fill(event.GetEventVariable(ev), weight);
+            if(weight < weight_th and !isnan(weight)){
+                hMap[key]->Fill(event.GetEventVariable(ev), weight);
+            }
         }
     }
 }
@@ -637,6 +619,11 @@ void NormalizeHistograms(TString tgt){
             auto v = variable[iv];
             key = AcceptanceHistTitle1D(tgt, p, v, "Gen" + trig);
             maxi = hMap[key]->GetMaximum();
+            if(maxi == 0 ){
+                cout<<"Warning! Empty histogram for "<<key<<endl;
+                maxi = 1;
+                //Null results shuld also be recorded. 
+            }
             key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt"+trig);
             hMap[key]->Scale(1./maxi);
             hMap[key]->SetLineColor(kBlue);
@@ -686,6 +673,11 @@ void NormalizeHistograms(TString tgt){
         double maxi = 0;
         key = EventTitle(tgt, ev, "Gen" + trig);
         maxi = hMap[key]->GetMaximum();
+        if(maxi == 0 ){
+            cout<<"Warning! Empty histogram for "<<key<<endl;
+            maxi = 1;
+            //Null results shuld also be recorded. 
+        }
         key = EventTitle(tgt, ev, "XiAcpt"+trig);
         hMap[key]->Scale(1./maxi);
         hMap[key]->SetLineColor(kBlue);
@@ -741,6 +733,7 @@ TGraphErrors* MakeDivisionGraph(TH1* h1, TH1* h2){
         if(y2 == 0) continue;
         double y = y1 / y2;
         double err = y * sqrt(pow(err1/y1, 2) + pow(err2/y2, 2));
+        if(y1 == 0) err = 0;
         g->SetPoint(g->GetN(), x, y);
         g->SetPointError(g->GetN()-1, 0, err);
     }
@@ -753,7 +746,9 @@ TGraphErrors* MakeDivisionGraph(TH1* h1, TH1* h2){
     return g;
 }
 
-double CalcChi2(TH1* Gen, TH1* Cor, double trun = 0.2){
+double CalcChi2(TH1* Gen, TH1* Cor, double trun = 0.0){
+    //260730->trun 0.2 -> 0.
+    //
     double chi2 = 0;
     int ent_eff = 0;
     for(int i = 1; i <= Gen->GetNbinsX();++i){
@@ -769,13 +764,13 @@ double CalcChi2(TH1* Gen, TH1* Cor, double trun = 0.2){
         double cor = Cor->GetBinContent(i);
         double cor_err = Cor->GetBinError(i);
         double err = hypot(gen_err, cor_err);
-        dels.push_back((gen - cor));
+        dels.push_back(abs(gen - cor));
         //dels.push_back((gen - cor)/err);
     }
     std::sort(dels.begin(), dels.end());
     int n = dels.size();
     int nc = 0;
-    for(int i = 0; i < n * (1-trun);++i){
+    for(int i = n*trun; i < n ;++i){
         chi2 += pow(dels[i], 2);
         nc ++;
     }
@@ -846,7 +841,10 @@ void MakeChi2Map(TString tgt){
         vector<TString> best_var;
         map<vector<TString>, double> cor_chi2_best;
         for(auto& [var, chi2]: cor_chi2){
-            if(chi2_min < 0) chi2_min = chi2;
+            if(chi2_min < 0){
+                chi2_min = chi2;
+                best_var = var;
+            }
             if(chi2 < chi2_min){
                 chi2_min = chi2;
                 best_var = var;
@@ -857,4 +855,19 @@ void MakeChi2Map(TString tgt){
         chi2Maps_best.push_back(chi2map_best);
         cout<<"Best chi2 for "<<part_cor<<" "<<num<<"/"<<den<<" is "<<chi2_min<<" with var "<<best_var[0]<<" "<<best_var[1]<<endl;
     }
+}
+bool FileCheck(TString filename){
+    bool val = 1;
+    TFile file(filename, "READ");
+    if(file.IsZombie()){
+        cout<<"File "<<filename<<" is not found!"<<endl;
+        val = 0;
+    }
+    if(!file.Get("tpc")){
+        cout<<"File "<<filename<<" does not contain tpc tree!"<<endl;
+        val = 0;
+    }
+    file.Close();
+    return val;
+
 }
