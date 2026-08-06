@@ -8,9 +8,9 @@
 #define PosShift 1
 #include "G4XiAcceptanceCheck.hh"
 #include <TCanvas.h>
-TString WAcc,Target,Conf,LVtxConf,filename,figdir_base,file_dir;
+TString WAcc,Target,Conf,LVtxConf,filename,figdir_base,file_dir, bufdir;
 TString tgt = "Carbon";
-bool test_run = 0;
+bool test_run = 1;
 #if CH2
   tgt = "CH2";
 #endif
@@ -18,14 +18,17 @@ void G4XiAcceptanceCheck(){
   cout<<"Setting configurations..."<<endl;
   WAcc = "_WB";
   figdir_base = Form("figs_%d/%s/", date,tgt.Data());
+  bufdir = Form("buffer/%d/%s/", date,tgt.Data());
   if(TrigB){
     figdir_base.ReplaceAll("figs","figs_TrigB");
   }
 #if PerXiDist
     figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
+    bufdir.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
 #endif
 #if PerDist
     figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
+    bufdir.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
 #endif
 #if CH2
     file_dir = "./rootfiles/Geant4CH2/";
@@ -46,15 +49,19 @@ void G4XiAcceptanceCheck(){
 #endif
 #if PosShift
     figdir_base.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
+    bufdir.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
 #endif
-  if(test_run) figdir_base.ReplaceAll(tgt,tgt + "_testrun");
+  if(test_run){
+    figdir_base.ReplaceAll(tgt,tgt + "_testrun");
+  }
 #if LVtxIsXi
   LVtxConf = "_LVtxIsXi";
   figdir_base.ReplaceAll(tgt.Data(),(tgt + LVtxConf ).Data());
+  bufdir.ReplaceAll(tgt.Data(),(tgt + LVtxConf ).Data());
 #endif
 }
 
-void G4XiAcceptanceCheck(int i, int frac, int ndiv){
+void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
   if(file_dir == "") G4XiAcceptanceCheck();
   SetStyle();
   TChain* tree = new TChain("tpc");
@@ -99,7 +106,6 @@ void G4XiAcceptanceCheck(int i, int frac, int ndiv){
   LoadEfficiencies(acpt_file, tgt);
   auto ent = tree->GetEntries();
   cout<<"Entries : "<<ent<<endl;
-  if(test_run) ent = ent / 10;
   int start = 0,last = ent;
   if(ndiv != 1){
     int part = (ent / ndiv);
@@ -113,8 +119,8 @@ void G4XiAcceptanceCheck(int i, int frac, int ndiv){
     FillHistograms(Xi, tgt);
   }
   gSystem->mkdir(figdir_base, true);
-  gSystem->mkdir(figdir_base + "rootfiles/", true);
-  TFile* out_file = TFile::Open(Form("%srootfiles/CorrectedHistograms_%d_%d_%d.root", figdir_base.Data(), i, frac, ndiv), "RECREATE");
+  gSystem->mkdir(bufdir, true);
+  TFile* out_file = TFile::Open(Form("%sCorrectedHistograms_%d_%d_%d.root", bufdir.Data(), i, frac, ndiv), "RECREATE");
   out_file->cd();
   for(auto& [key, hist]: hMap){
     hist->Write();
@@ -122,9 +128,6 @@ void G4XiAcceptanceCheck(int i, int frac, int ndiv){
   out_file->Write();
   out_file->Close();
 
-}
-void G4XiAcceptanceCheck(int i){
-  G4XiAcceptanceCheck(i, 1, 1);
 }
 void CheckAcceptance(vector<TFile*> files){
   if(figdir_base == "") G4XiAcceptanceCheck();
@@ -595,11 +598,15 @@ void CheckAcceptanceAll(){
   SetStyle();
   int nfile = 30;
   int ndiv = 10;
-  if(test_run) nfile = 1;
+  int runs = ndiv;
+  if(test_run){
+    nfile = 1;
+    runs = 1;
+  }
   vector<TFile*> files;
   for(int i=0;i<nfile;++i){
-    for(int frac = 1; frac <= ndiv; ++frac){
-      TFile* file = TFile::Open(Form("%srootfiles/CorrectedHistograms_%d_%d_%d.root", figdir_base.Data(), i, frac, ndiv));
+    for(int frac = 1; frac <= runs; ++frac){
+      TFile* file = TFile::Open(Form("%sCorrectedHistograms_%d_%d_%d.root", bufdir.Data(), i, frac, ndiv));
       files.push_back(file);
     }
   }
@@ -694,7 +701,7 @@ void G4XiAcceptanceCheckAll(){
 #endif
   gSystem->mkdir(figdir_base, true);
   gSystem->mkdir(figdir_base + "rootfiles/", true);
-  TFile* out_file = TFile::Open(figdir_base + "rootfiles/AcceptanceCorrectionMaps.root", "RECREATE");
+  TFile* out_file = TFile::Open(bufdir + "rootfiles/AcceptanceCorrectionMaps.root", "RECREATE");
   out_file->cd();
   for(auto& [key, hist]: hMap){
     hist->Write();

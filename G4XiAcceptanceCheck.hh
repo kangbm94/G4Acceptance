@@ -260,16 +260,22 @@ void InitializeCorrectionHistograms(TString tgt){
         hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
     }
 };
-void LoadOrAddHistogram(TString key, TFile* file){
+void LoadOrAddHistogram(TString key, TFile* file, TString chk = ""){
     if(hMap.find(key) == hMap.end()){
         hMap[key] = (TH1*)file->Get(key);
-        hMap[key] -> SetLineColor(colorMap[key]);
+        if(chk == ""){
+            cout<<"Warning: No CheckList specified for histogram "<<key<<"."<<endl;
+        }
+        else{
+            hMap[key] -> SetLineColor(colorMap[chk]);
+        }
     }
     else{
         hMap[key] ->Add((TH1*)file->Get(key));
     }
 }
 void LoadCorrectionHistograms(TFile* file,TString tgt){
+    cout<<"Loading histograms from file: "<<file->GetName()<<endl;
     for(auto cp:CorrPars){
         TString num = cp.num;
         TString den = cp.den;
@@ -289,7 +295,7 @@ void LoadCorrectionHistograms(TFile* file,TString tgt){
             for(int iv=0;iv<variable.size();++iv){
                 auto v = variable[iv];
                 TString key = AcceptanceHistTitle1D(tgt, p, v, chk);
-                LoadOrAddHistogram(key, file);
+                LoadOrAddHistogram(key, file, chk);
     for(auto cp:CorrPars){
         TString num = cp.num;
         if(num != chk) continue;
@@ -298,11 +304,11 @@ void LoadCorrectionHistograms(TFile* file,TString tgt){
         for(int iv1 = 0; iv1 < variable.size();++iv1){
             auto v1 = variable[iv1];
             key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1);
-            LoadOrAddHistogram(key, file);
+            LoadOrAddHistogram(key, file, chk);
             for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
                 auto v2 = variable[iv2];
                 key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1, v2);
-                LoadOrAddHistogram(key, file);
+                LoadOrAddHistogram(key, file, chk);
             }//iv2
         }//iv1
     }//cp
@@ -310,7 +316,7 @@ void LoadCorrectionHistograms(TFile* file,TString tgt){
         }//particle
         for(auto ev: EventVars){
             TString key = EventTitle(tgt, ev, chk);
-            LoadOrAddHistogram(key, file);
+            LoadOrAddHistogram(key, file, chk);
     for(auto cp:CorrPars){
         TString num = cp.num;
         if(num != chk) continue;
@@ -319,11 +325,11 @@ void LoadCorrectionHistograms(TFile* file,TString tgt){
         for(int iv1 = 0; iv1 < variable.size();++iv1){
             auto v1 = variable[iv1];
             key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1);
-            LoadOrAddHistogram(key, file);
+            LoadOrAddHistogram(key, file, chk);
             for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
                 auto v2 = variable[iv2];
                 key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1, v2);
-                LoadOrAddHistogram(key, file);
+                LoadOrAddHistogram(key, file, chk);
             }//iv2
         }//iv1
     }//cp

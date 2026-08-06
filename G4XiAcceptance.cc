@@ -95,7 +95,7 @@ void G4XiAcceptance(int i, int frac = 1, int ndiv = 1){
     FillHist(Xi);
   }
   TFile* fileOut;
-  TString buf = fout_dir + "buf/";
+  TString buf = fout_dir + Form("buf/%s/%d",Target.Data(),date);
   gSystem->mkdir(buf,1);
   TString file_parallel = fout_name;
   file_parallel.ReplaceAll(".root",Form("_%d_%d_%d.root",i,frac,ndiv));
@@ -131,7 +131,7 @@ void G4MakeEfficiencies(vector<TString> files){
 }
 void G4MakeEfficiencies(){
   if(fout_dir == "") G4XiAcceptance();
-  TString buf = fout_dir + "buf/";
+  TString buf = fout_dir + Form("buf/%s/%d",Target.Data(),date);
   gSystem->mkdir(buf,1);
   TString file_parallel = fout_name;
   int nfile = 30;
