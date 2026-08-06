@@ -118,6 +118,18 @@ TString SetEventVarAxis(TString var, int &nbinx, double &minx, double &maxx){
             {"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
             {"PTracked", "Gen", "P", {"Mom"}}
 		};
+#if SecondaryCorr
+    #if date < 260806
+        double p0 = 0.989681, p1 = -0.0194191;
+    #else
+        double p0 = 0.992069, p1 = -0.0135689;
+    #endif
+        TGraph* gr_PhA = new TGraph();
+        gr_PhA->SetPoint(0, -1, p0 - p1);
+        gr_PhA->SetPoint(1, 0, p0 );
+        gr_PhA->SetPoint(2, 1, p0 + p1);
+        SecondaryCorrection["PolCPhA"] = gr_PhA;
+#endif
 #endif
 #endif
 TString CorrectionHists(TString pre, TString part, TString var, TString suff, TString part_cor, TString num, TString den, TString v1, TString v2 = ""){
@@ -612,7 +624,21 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
     if(weightRec > weight_th or isnan(weightRec)){
         over_cnt++;
         cout<<Form("w = %g, wRec = %g, event count over threshold = %d", weight, weightRec, over_cnt)<<endl;
-    }    
+    }
+#if SecondaryCorr 
+    if(gf->Xiflag){
+        for(auto ev:EventVars){
+            for(auto sec:SecondaryCorrection){
+                TString sec_name = sec.first;
+                if(ev != sec_name) continue;
+                TGraph* gr = sec.second;
+                double var = event.GetEventVariableRec(sec_name);
+                double eff_sec = gr->Eval(var);
+                weightRec *= 1./eff_sec;
+            }
+        }
+    }
+#endif
     for(auto p:particle){
         for(int iv=0;iv<variable.size();++iv){
             auto v = variable[iv];
@@ -955,21 +981,6 @@ void MakeChi2Map(TString tgt){
         chi2Maps_best.push_back(chi2map_best);
         cout<<"Best chi2 for "<<part_cor<<" "<<num<<"/"<<den<<" is "<<chi2_min<<" with var "<<best_var[0]<<" "<<best_var[1]<<endl;
     }
-}
-bool FileCheck(TString filename){
-    bool val = 1;
-    TFile file(filename, "READ");
-    if(file.IsZombie()){
-        cout<<"File "<<filename<<" is not found!"<<endl;
-        val = 0;
-    }
-    if(!file.Get("tpc")){
-        cout<<"File "<<filename<<" does not contain tpc tree!"<<endl;
-        val = 0;
-    }
-    file.Close();
-    return val;
-
 }
 
 void CheckAcceptance(vector<TFile*> files);

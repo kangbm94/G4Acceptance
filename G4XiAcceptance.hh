@@ -108,7 +108,6 @@ TString SetAxis(TString part, TString var, int& bin, double& min, double& max){
 };
 
 void InitializeHistograms(){
-
   int nbin, nbinx, nbiny;
   double minx, maxx, miny, maxy;
   TString Xtitle, Ytitle;
@@ -169,7 +168,7 @@ void LoadOrAdd2DHistogram(TString key, TFile* file){
     }
 }
 void LoadHistograms(TFile* file){
-
+  cout<<"Loading Histograms from "<<file->GetName()<<endl;
   for(auto t:triggers){
   for(auto s:suffix){
     s = s + t;
@@ -393,5 +392,20 @@ SetBranches(TTree* tree){
   tree->SetBranchStatus("KFXiProductionVtx_x",1);
   tree->SetBranchStatus("KFXiProductionVtx_y",1);
   tree->SetBranchStatus("KFXiProductionVtx_z",1);
+
+}
+bool FileCheck(TString filename){
+    bool val = 1;
+    TFile file(filename, "READ");
+    if(file.IsZombie()){
+        cout<<"File "<<filename<<" is not found!"<<endl;
+        val = 0;
+    }
+    if(!file.Get("tpc")){
+        cout<<"File "<<filename<<" does not contain tpc tree!"<<endl;
+        val = 0;
+    }
+    file.Close();
+    return val;
 
 }

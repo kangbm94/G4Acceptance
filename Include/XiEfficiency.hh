@@ -24,6 +24,7 @@ struct CorrectionParameter{
 };
 
 vector<CorrectionParameter> CorrPars;
+map<TString, TGraph*> SecondaryCorrection;
 int ndist = VertDistances.size();
 TString GetDistKey(TVector3 V){
   double dist = DistT(V);
@@ -173,6 +174,12 @@ void MakeEff1D(TString Num, TString Den){
       #endif
       auto hGen = hMap[key0];
       auto hSuff = hMap[key];
+      if(hGen == nullptr){
+        cout<<"Histogram "<<key0<<" not found!"<<endl;
+      }
+      if(hSuff == nullptr){
+        cout<<"Histogram "<<key<<" not found!"<<endl;
+      }
       key_eff = EffTitle1D("G4", p, v1, Num, Den);
       effMap[key_eff] = new TEfficiency(*hSuff, *hGen);
       effMap[key_eff]->SetNameTitle(key_eff, key_eff);
@@ -193,6 +200,12 @@ void MakeEff2D(TString Num, TString Den){
       #endif
         auto hGen = hMap2D[key0];
         auto hSuff = hMap2D[key];
+        if(hGen == nullptr){
+          cout<<"Histogram "<<key0<<" not found!"<<endl;
+        }
+        if(hSuff == nullptr){
+          cout<<"Histogram "<<key<<" not found!"<<endl;
+        }
         key_eff = EffTitle2D("G4", p, v1, v2, Num, Den);
         effMap[key_eff] = new TEfficiency(*hSuff, *hGen);
         effMap[key_eff]->SetNameTitle(key_eff, key_eff);
@@ -200,6 +213,12 @@ void MakeEff2D(TString Num, TString Den){
           if(v1 == "DistT" or v2 == "DistT") continue;
           auto hGen = hMap2D[key0 + GetDistKey(id)];
           auto hSuff = hMap2D[key + GetDistKey(id)];
+          if(hGen == nullptr){
+            cout<<"Histogram "<<key0 + GetDistKey(id)<<" not found!"<<endl;
+          }
+          if(hSuff == nullptr){
+            cout<<"Histogram "<<key + GetDistKey(id)<<" not found!"<<endl;
+          }
       #if Debug
         cout<<"Making Eff "<<key + GetDistKey(id)<<" over "<<key0 + GetDistKey(id)<<endl;
       #endif

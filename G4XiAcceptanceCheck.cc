@@ -4,13 +4,14 @@
 #define TrigB 0
 #define Recon 1
 #define CH2 0
-#define date 260805
+#define date 260806
 #define PosShift 1
+#define SecondaryCorr 1
 #include "G4XiAcceptanceCheck.hh"
 #include <TCanvas.h>
 TString WAcc,Target,Conf,LVtxConf,filename,figdir_base,file_dir, bufdir;
 TString tgt = "Carbon";
-bool test_run = 1;
+bool test_run = 0;
 #if CH2
   tgt = "CH2";
 #endif
@@ -31,34 +32,30 @@ void G4XiAcceptanceCheck(){
     bufdir.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
 #endif
 #if CH2
-    file_dir = "./rootfiles/Geant4CH2/";
-    Conf = "CH2";
-    Target = "CH2";
-  #if PosShift
     file_dir = "rootfiles/Geant4CH2/6mmShift/";
     Conf = "CH26mmShift";
-  #endif
-  #else
-    file_dir = "./rootfiles/Geant4Prod/W_Acc/";
-    Conf = "Prod";
-    Target = "Carbon";
-  #if PosShift
+    Target = "CH2";
+#else
     file_dir = "rootfiles/Geant4Prod/6mmShift/";
+    file_dir = "rootfiles/Geant4Prod/6mmShift/wo_upstream_search/";
     Conf = "Prod6mmShift";
-  #endif
+    Target = "Carbon";
 #endif
-#if PosShift
     figdir_base.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
     bufdir.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
-#endif
   if(test_run){
     figdir_base.ReplaceAll(tgt,tgt + "_testrun");
   }
-#if LVtxIsXi
   LVtxConf = "_LVtxIsXi";
   figdir_base.ReplaceAll(tgt.Data(),(tgt + LVtxConf ).Data());
   bufdir.ReplaceAll(tgt.Data(),(tgt + LVtxConf ).Data());
+#if SecondaryCorr
+  figdir_base.ReplaceAll(tgt.Data(),(tgt + "_SecondaryCorr").Data());
+  bufdir.ReplaceAll(tgt.Data(),(tgt + "_SecondaryCorr").Data());
 #endif
+  cout<<"=======Usage======"<<endl;
+  cout<<"G4XiAcceptanceCheck(i,frac,ndiv) : Run the analysis for file index i, with fraction frac of ndiv parts"<<endl;
+  cout<<"CheckAcceptanceAll() : Check the acceptance for all files"<<endl;
 }
 
 void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
@@ -67,15 +64,9 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
   TChain* tree = new TChain("tpc");
   cout<<"Loading files..."<<endl;
 #if CH2
-    filename = Form("XiReconCH2_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
-	#if PosShift
 		filename = Form("XiReconCH2_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
-	#endif
 #else
-    filename = Form("XiReconProd_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
-	#if PosShift
 		filename = Form("XiReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
-	#endif
 #endif
   if(FileCheck(file_dir+filename) == 0){
     cout<<"File "<<filename<<" not found. Exiting..."<<endl;
@@ -91,10 +82,10 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
   #endif
 #else
   TFile* acpt_file;
-  #if LVtxIsXi
+  #if date < 260806
     acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260726));
   #else
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0_WB_6mmShifted_%d.root",260726));
+    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260806));
   #endif
 #endif
   cout<<Form("Run %d, Target: %s, Date: %d", i,tgt.Data(), date)<<endl;
@@ -121,7 +112,7 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
   gSystem->mkdir(figdir_base, true);
   gSystem->mkdir(bufdir, true);
   TFile* out_file = TFile::Open(Form("%sCorrectedHistograms_%d_%d_%d.root", bufdir.Data(), i, frac, ndiv), "RECREATE");
-  out_file->cd();
+  out_file->cd("");
   for(auto& [key, hist]: hMap){
     hist->Write();
   }
@@ -579,14 +570,16 @@ void CheckAcceptance(vector<TFile*> files){
         tex->SetTextColor(kMagenta);
         tex->DrawLatex(0.2, 0.2, Form("Rec Ratio: %.3f #pm %.5f", mean_rat_cor, std_rat_cor));
       }
-      out_file->cd();
+      // ROOT declares cd() with a null default path; pass an explicit empty
+      // path to select this file while avoiding -Wnonnull from that default.
+      out_file->cd("");
       gr->Write(Form("Graph_%s_Corr_w_rat", ev.Data()));
       grrec->Write(Form("Graph_%s_RecCorr_w_rat", ev.Data()));
       
     }
     c_corr_rat->SaveAs(figdir_rec + ct + ".pdf");
   }//EventVar
-  out_file->cd();
+  out_file->cd("");
   for(auto& [key, hist]: hMap){
     hist->Write(); 
   }
@@ -702,7 +695,7 @@ void G4XiAcceptanceCheckAll(){
   gSystem->mkdir(figdir_base, true);
   gSystem->mkdir(figdir_base + "rootfiles/", true);
   TFile* out_file = TFile::Open(bufdir + "rootfiles/AcceptanceCorrectionMaps.root", "RECREATE");
-  out_file->cd();
+  out_file->cd("");
   for(auto& [key, hist]: hMap){
     hist->Write();
   }

@@ -1,53 +1,30 @@
 #define LooseBin 0
 #define Debug 0
-#define date 260729
+#define date 260806
 #define LVtxIsXi 1
 #define SavePDF 0
 #include "G4XiAcceptance.hh"
 #define Recon 1
-#define CH2 1
+#define CH2 0
 #define PosShift 1
 gErrorIgnoreLevel = kWarning;
 TString WAcc,Target,Conf,LVtxConf,filename,file_dir,fout_dir,fout_name,figdir2d;
 gStyle -> SetOptStat(0);
 bool file_check = 1;
 void G4XiAcceptance(){
-#if LVtxIsXi
-    LVtxConf = "_LVtxIsXi";
-#endif
+  LVtxConf = "_LVtxIsXi";
   WAcc = "_WB";
-#if CH2
-  file_dir = "./rootfiles/Geant4CH2/W_Acc/";
-	Conf = "CH2";
-	Target = "CH2";
-#else
-  file_dir = "./rootfiles/Geant4Prod/W_Acc/";
-	Conf = "Prod";
-	Target = "Carbon";
-#endif
-#if PosShift
 #if CH2
   file_dir = "rootfiles/Geant4CH2/6mmShift/";
   Conf = "CH26mmShift";
+	Target = "CH2";
 #else
-  file_dir = "rootfiles/Geant4Prod/6mmShift/";
+  file_dir = "rootfiles/Geant4Prod/6mmShift/wo_upstream_search/";
   Conf = "Prod6mmShift";
-#endif
+	Target = "Carbon";
 #endif
   fout_dir = "./Maps/";
-#if Recon
-	figdir = Form("./Maps_%d/AcceptanceHists/ReconPol_%s%s%s/", date,Conf.Data(),LVtxConf.Data(),WAcc.Data());
-#else
-  figdir = Form("./Maps_%d/AcceptanceHists/MissPol_%s%s/", date,Target.Data(),WAcc.Data());
-#endif
-  fout_name = Form("%s_MM_%s%s_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
-#if Recon
-	fout_name = Form("%s_ReconPE42_%s%s_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
-#else
-#endif
-#if PosShift
   fout_name = Form("%s_ReconP0_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
-#endif
 #if LooseBin
   fout_name = fout_name.ReplaceAll(".root","_LooseBin.root");
 	figdir.ReplaceAll("Hists","Hists_LooseBin");
@@ -55,6 +32,9 @@ void G4XiAcceptance(){
 	figdir2d = figdir + "2D/";
   gSystem->mkdir(figdir,1);
   gSystem->mkdir(figdir2d,1);
+  cout<<"=======Usage======"<<endl;
+  cout<<"G4XiAcceptance(i,frac,ndiv) : Run the analysis for file index i, with fraction frac of ndiv parts"<<endl;
+  cout<<"G4XiMakeEfficiencies() : Make the efficiency maps from the histograms"<<endl;
 }
 void G4XiAcceptance(int i, int frac = 1, int ndiv = 1){
   if(fout_dir == "") G4XiAcceptance();
@@ -95,7 +75,7 @@ void G4XiAcceptance(int i, int frac = 1, int ndiv = 1){
     FillHist(Xi);
   }
   TFile* fileOut;
-  TString buf = fout_dir + Form("buf/%s/%d",Target.Data(),date);
+  TString buf = fout_dir + Form("buf/%s/%d/",Target.Data(),date);
   gSystem->mkdir(buf,1);
   TString file_parallel = fout_name;
   file_parallel.ReplaceAll(".root",Form("_%d_%d_%d.root",i,frac,ndiv));
@@ -131,7 +111,7 @@ void G4MakeEfficiencies(vector<TString> files){
 }
 void G4MakeEfficiencies(){
   if(fout_dir == "") G4XiAcceptance();
-  TString buf = fout_dir + Form("buf/%s/%d",Target.Data(),date);
+  TString buf = fout_dir + Form("buf/%s/%d/",Target.Data(),date);
   gSystem->mkdir(buf,1);
   TString file_parallel = fout_name;
   int nfile = 30;
