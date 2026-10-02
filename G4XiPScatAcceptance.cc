@@ -1,17 +1,17 @@
 #define LooseBin 0
 #define Debug 0
-#define date 260817
+#define date 261001
 #define LVtxIsXi 1
 #define SavePDF 0
-#include "G4XiAcceptance.hh"
+#include "G4XiPScatAcceptance.hh"
 #define Recon 1
-#define CH2 1
+#define CH2 0
 #define PosShift 1
 gErrorIgnoreLevel = kWarning;
 TString WAcc,Target,Conf,LVtxConf,filename,file_dir,fout_dir,fout_name,figdir2d;
 gStyle -> SetOptStat(0);
 bool file_check = 1;
-void G4XiAcceptance(){
+void G4XiPScatAcceptance(){
   LVtxConf = "_LVtxIsXi";
   WAcc = "_WB";
 #if CH2
@@ -19,12 +19,12 @@ void G4XiAcceptance(){
   Conf = "CH26mmShift";
 	Target = "CH2";
 #else
-  file_dir = "rootfiles/Geant4Prod/6mmShift/wo_upstream_search/";
-  Conf = "Prod6mmShift";
+  file_dir = "rootfiles/Geant4Prod/XiPScat/";
+  Conf = "ProdXiPScat6mmShift";
 	Target = "Carbon";
 #endif
   fout_dir = "./Maps/";
-  fout_name = Form("%s_ReconP0_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
+  fout_name = Form("%sXiPScat_Recon_P0_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
 #if LooseBin
   fout_name = fout_name.ReplaceAll(".root","_LooseBin.root");
 	figdir.ReplaceAll("Hists","Hists_LooseBin");
@@ -33,18 +33,17 @@ void G4XiAcceptance(){
   gSystem->mkdir(figdir,1);
   gSystem->mkdir(figdir2d,1);
   cout<<"=======Usage======"<<endl;
-  cout<<"G4XiAcceptance(i,frac,ndiv) : Run the analysis for file index i, with fraction frac of ndiv parts"<<endl;
+  cout<<"G4XiPScatAcceptance(i,frac,ndiv) : Run the analysis for file index i, with fraction frac of ndiv parts"<<endl;
   cout<<"G4MakeEfficiencies() : Make the efficiency maps from the histograms"<<endl;
 }
-void G4XiAcceptance(int i, int frac = 1, int ndiv = 1){
-  if(fout_dir == "") G4XiAcceptance();
+void G4XiPScatAcceptance(int i, int frac = 1, int ndiv = 1){
+  if(fout_dir == "") G4XiPScatAcceptance();
   TChain* tree = new TChain("tpc");
-  filename = Form("XiRecon%s_P_E42_%d_GenfitCarbonGeant4Ver5.root",Conf.Data(),i);
 #if PosShift
 #if CH2
   filename = Form("XiReconCH2_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
 #else
-  filename = Form("XiReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
+  filename = Form("XiPScatReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root",i);
 #endif
 #endif
   cout<<"Loading "<<filename<<endl;
@@ -75,7 +74,7 @@ void G4XiAcceptance(int i, int frac = 1, int ndiv = 1){
     FillHist(Xi);
   }
   TFile* fileOut;
-  TString buf = fout_dir + Form("buf/%s/%d/",Target.Data(),date);
+  TString buf = fout_dir + Form("buf/%s/%d/",Conf.Data(),date);
   gSystem->mkdir(buf,1);
   TString file_parallel = fout_name;
   file_parallel.ReplaceAll(".root",Form("_%d_%d_%d.root",i,frac,ndiv));
@@ -110,12 +109,12 @@ void G4MakeEfficiencies(vector<TString> files){
   fileOut->Close();
 }
 void G4MakeEfficiencies(){
-  if(fout_dir == "") G4XiAcceptance();
-  TString buf = fout_dir + Form("buf/%s/%d/",Target.Data(),date);
+  if(fout_dir == "") G4XiPScatAcceptance();
+  TString buf = fout_dir + Form("buf/%s/%d/",Conf.Data(),date);
   gSystem->mkdir(buf,1);
   TString file_parallel = fout_name;
-  int nfile = 30;
-  int ndiv = 1;
+  int nfile = 10;
+  int ndiv = 10;
   vector<TFile*> files;
   for(int i=0;i<nfile;++i){
     for(int frac = 1; frac <= ndiv; ++frac){
@@ -140,9 +139,9 @@ void G4MakeEfficiencies(){
   cout<<"All done. Closing file."<<endl;
   fileOut->Close();
 }
-void G4XiAcceptanceAll(){
+void G4XiPScatAcceptanceAll(){
 //  double pxi = -0.3;
-  if(fout_dir == "") G4XiAcceptance();
+  if(fout_dir == "") G4XiPScatAcceptance();
   double pxi = 0;
   int nfiles = 30;
   TChain* tree = new TChain("tpc");

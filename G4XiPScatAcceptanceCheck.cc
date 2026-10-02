@@ -3,15 +3,15 @@
 #define LVtxIsXi 1
 #define TrigB 0
 #define Recon 1
-#define CH2 1
-#define date 260817
+#define CH2 0
+#define date 261001
 #define PosShift 1
 #define SecondaryCorr 0
 #define DrawResSmeared 1
 #define DrawGeneValue 0
-#include "G4XiAcceptanceCheck.hh"
+#include "G4XiPScatAcceptanceCheck.hh"
 #include <TCanvas.h>
-TString WAcc,Target,Conf,LVtxConf,filename,figdir_base,file_dir, bufdir;
+TString WAcc,Target,Conf,LVtxConf,filename,figdir_base,file_dir, bufdir, fmap_dir,fmap_name;
 TString tgt = "Carbon";
 bool test_run = 0;
 #if CH2
@@ -21,58 +21,57 @@ double canv_size_x = 1500,canv_size_y = 1000;
 double left_margin = 0.1, right_margin = 0.05, top_margin = 0.05, bottom_margin = 0.16;
 double offset_x = 0.8, offset_y = 0.8;
 double tsize = 0.09, lsize = 0.06;
-void G4XiAcceptanceCheck(){
+void G4XiPScatAcceptanceCheck(){
   cout<<"Setting configurations..."<<endl;
   WAcc = "_WB";
   figdir_base = Form("figs_%d/%s/", date,tgt.Data());
-  bufdir = Form("buffer/%d/%s/", date,tgt.Data());
   if(TrigB){
     figdir_base.ReplaceAll("figs","figs_TrigB");
   }
 #if PerXiDist
-    figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
-    bufdir.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
+  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
+  bufdir.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
 #endif
 #if PerDist
-    figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
-    bufdir.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
+  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
+  bufdir.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
 #endif
 #if CH2
-    file_dir = "rootfiles/Geant4CH2/6mmShift/wo_upstream_search/";
-    Conf = "CH26mmShift";
-    Target = "CH2";
+  file_dir = "rootfiles/Geant4CH2/6mmShift/wo_upstream_search/";
+  Conf = "CH26mmShift";
+  Target = "CH2";
 #else
-    file_dir = "rootfiles/Geant4Prod/6mmShift/";
-    file_dir = "rootfiles/Geant4Prod/6mmShift/wo_upstream_search/";
-    Conf = "Prod6mmShift";
-    Target = "Carbon";
+  file_dir = "rootfiles/Geant4Prod/XiPScat/";
+  Conf = "ProdXiPScat6mmShift";
+  Target = "Carbon";
 #endif
-    figdir_base.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
-    bufdir.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
+  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
+  bufdir.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
+  fmap_dir = "./Maps/";
+  bufdir = fmap_dir + Form("buf/%s/%d/",Conf.Data(),date);
   if(test_run){
     figdir_base.ReplaceAll(tgt,tgt + "_testrun");
   }
   LVtxConf = "_LVtxIsXi";
   figdir_base.ReplaceAll(tgt.Data(),(tgt + LVtxConf ).Data());
-  bufdir.ReplaceAll(tgt.Data(),(tgt + LVtxConf ).Data());
 #if SecondaryCorr
   figdir_base.ReplaceAll(tgt.Data(),(tgt + "_SecondaryCorr").Data());
   bufdir.ReplaceAll(tgt.Data(),(tgt + "_SecondaryCorr").Data());
 #endif
   cout<<"=======Usage======"<<endl;
-  cout<<"G4XiAcceptanceCheck(i,frac,ndiv) : Run the analysis for file index i, with fraction frac of ndiv parts"<<endl;
+  cout<<"G4XiPScatAcceptanceCheck(i,frac,ndiv) : Run the analysis for file index i, with fraction frac of ndiv parts"<<endl;
   cout<<"CheckAcceptanceAll() : Check the acceptance for all files"<<endl;
 }
 
-void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
-  if(file_dir == "") G4XiAcceptanceCheck();
+void G4XiPScatAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
+  if(file_dir == "") G4XiPScatAcceptanceCheck();
   SetStyle();
   TChain* tree = new TChain("tpc");
   cout<<"Loading files..."<<endl;
 #if CH2
-		filename = Form("XiReconCH2_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
+  filename = Form("XiReconCH2_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
 #else
-		filename = Form("XiReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
+  filename = Form("XiPScatReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root",i);
 #endif
   if(FileCheck(file_dir+filename) == 0){
     cout<<"File "<<filename<<" not found. Exiting..."<<endl;
@@ -91,13 +90,9 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
   #endif
 #else
   TFile* acpt_file;
-  #if date < 260806
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260726));
-  #elif date >= 260817
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260817));
-  #else
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260806));
-  #endif
+  fmap_dir = "./Maps/";
+  fmap_name = Form("%sXiPScat_Recon_P0_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
+  acpt_file = TFile::Open(fmap_dir + fmap_name);
 #endif
   cout<<Form("Run %d, Target: %s, Date: %d", i,tgt.Data(), date)<<endl;
   cout<<"Map file :"<<acpt_file->GetName()<<endl;
@@ -119,6 +114,7 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
   for(auto i = start;i<last;i++){
     if(i%1000==0) cout << i << endl;
     Xi->GetEntry(i);
+    if(i == start) cout<<"Start filling histograms..."<<endl;
     FillHistograms(Xi, tgt);
   }
   gSystem->mkdir(figdir_base, true);
@@ -133,7 +129,7 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
 
 }
 void CheckAcceptance(vector<TFile*> files){
-  if(figdir_base == "") G4XiAcceptanceCheck();
+  if(figdir_base == "") G4XiPScatAcceptanceCheck();
   SetStyle();
   gStyle->SetTitleSize(tsize,"XY");
   gStyle->SetLabelSize(lsize,"XY");
@@ -631,7 +627,7 @@ void CheckAcceptance(vector<TFile*> files){
   out_file->Close();
 }
 void CheckAcceptanceAll(){
-  if(figdir_base == "") G4XiAcceptanceCheck();
+  if(figdir_base == "") G4XiPScatAcceptanceCheck();
   int nfile = 30;
   int ndiv = 5;
   int runs = ndiv;
@@ -648,8 +644,8 @@ void CheckAcceptanceAll(){
   }
   CheckAcceptance(files);
 }
-void G4XiAcceptanceCheckAll(){
-  if(figdir_base == "")G4XiAcceptanceCheck();
+void G4XiPScatAcceptanceCheckAll(){
+  if(figdir_base == "")G4XiPScatAcceptanceCheck();
   SetStyle();
   double pxi = 0;
   int nfile = 30;

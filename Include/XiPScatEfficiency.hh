@@ -8,12 +8,13 @@ vector<double> VertDistances = {0, 14, 23, 33, 42, 52, 61, 71, 80, 90, 99, 110, 
 #else
 vector<double> VertDistances = {0, 23, 42, 61, 80, 99, 120, 145, 171, 196, 222, 250, 400};
 #endif
-vector<TString> particle = {"P", "Pi1", "Pi2" , "L", "Xi"};
+vector<TString> particle = {"P", "Pi1", "Pi2" , "L", "Xi", "ScatP"};
 vector<TString> variable = {"CosTh", "Mom", "Ph", "DistT", "CosPsi", "CosOpen"};
 vector<TString> suffix = {"Gen",
    "LAcpt", "GoodL", "GoodXi",
     "XiAcpt", "PTracked", "Pi1Tracked", "Pi2Tracked",
-    "PPi1Tracked","AllTracked", "GoodLAndPi2Tracked"
+    "PPi1Tracked","AllTracked", "GoodLAndPi2Tracked",
+    "ScatPTracked", "ScatPGood", "GoodXiAndScatPTracked", "GoodXiAndScatPGood"
 };
 map<TString, TString> Labels =
 {
@@ -27,7 +28,11 @@ map<TString, TString> Labels =
   {"Pi2Tracked", "Reconstructed #pi_{#Xi} tracks"},
   {"PPi1Tracked", "Reconstructed p and #pi_{#Lambda} tracks"},
   {"AllTracked", "Reconstructed p, #pi_{#Lambda}, and #pi_{#Xi} tracks"},
-  {"GoodLAndPi2Tracked", "Reconstructed #Lambda and #pi_{#Xi} tracks"}
+  {"GoodLAndPi2Tracked", "Reconstructed #Lambda and #pi_{#Xi} tracks"},
+  {"ScatPTracked", "Reconstructed scattered proton tracks"},
+  {"ScatPGood", "Reconstructed good scattered proton tracks"},
+  {"GoodXiAndScatPTracked", "Reconstructed #Xi and scattered proton tracks"},
+  {"GoodXiAndScatPGood", "Reconstructed #Xi and good scattered proton tracks"}
 };
 //vector<TString> triggers = {"", "TrigB"};
 vector<TString> triggers = {""};

@@ -462,10 +462,103 @@ TH1D* MakeDividedHistBGSubtracked(TH1D* h_num, TH1D* h_den, TString name, double
 
 
 
-map<TString, TH1 *> hMap;
-map<TString, TH2 *> hMap2D;
-map<TString, TGraph*> gMap;
-map<TString, TEfficiency *> effMap;
+
+template<class T>
+class CheckedMap {
+    using Storage = std::map<TString, T*>;
+    Storage data_;
+
+public:
+    class Entry {
+        Storage& data_;
+        TString key_;
+
+    public:
+        Entry(Storage& data, const TString& key)
+            : data_(data), key_(key) {}
+
+        // Supports: objectMap[key] = new SomeClass(...);
+        Entry& operator=(T* object)
+        {
+            data_[key_] = object;
+            return *this;
+        }
+        template<class U>
+        explicit operator U*() const
+        {
+            // operator->() checks for missing/null objects.
+            U* result = dynamic_cast<U*>(operator->());
+
+            if (!result) {
+                const std::string message =
+                    "Warning! Invalid object cast for : "
+                    + std::string(key_.Data());
+
+                std::cerr << message << std::endl;
+                throw std::runtime_error(message);
+            }
+
+            return result;
+        }
+
+        // Supports: objectMap[key]->SomeMethod(...);
+        T* operator->() const
+        {
+            const auto it = data_.find(key_);
+
+            if (it == data_.end() || it->second == nullptr) {
+                const std::string message =
+                    "Warning! No object for : "
+                    + std::string(key_.Data());
+
+                std::cerr << message << std::endl;
+                throw std::runtime_error(message);
+            }
+
+            return it->second;
+        }
+
+        // Also supports: T* object = objectMap[key];
+        operator T*() const
+        {
+            return operator->();
+        }
+    };
+
+    Entry operator[](const TString& key)
+    {
+        return Entry(data_, key);
+    }
+
+
+    typename Storage::iterator begin() { return data_.begin(); }
+    typename Storage::iterator end()   { return data_.end(); }
+
+    typename Storage::const_iterator begin() const
+    {
+        return data_.begin();
+    }
+
+    typename Storage::const_iterator end() const
+    {
+        return data_.end();
+    }
+    typename Storage::iterator find(const TString& key)
+    {
+        return data_.find(key);
+    }
+
+    typename Storage::const_iterator find(const TString& key) const
+    {
+        return data_.find(key);
+    }
+
+};
+
+CheckedMap<TH1> hMap;
+CheckedMap<TH1> hMap2D;
+CheckedMap<TGraph> gMap;
+CheckedMap<TEfficiency> effMap;
 vector<TString> LCorrection;
 vector<TString> XiCorrection;
 vector<TString> targets = {"CH2", "Carbon"};

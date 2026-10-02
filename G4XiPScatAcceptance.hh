@@ -1,5 +1,5 @@
-#include "Include/g4genfitcarbon.h"
-#include "Include/XiEfficiency.hh"
+#include "Include/g4genfitxipscat.h"
+#include "Include/XiPScatEfficiency.hh"
 #include "Include/PolarizationAnal.hh"
 using namespace std;
 //#include "G4PolaBranches.hh"
@@ -53,6 +53,10 @@ bool SuffixCheck(TString suff, g4genfitcarbon* XiEv){
   if(suff.Contains("PPi1Tracked")) ret = (XiEv->p_tracked and XiEv->pi1_tracked);
   if(suff.Contains("AllTracked")) ret = (XiEv->p_tracked and XiEv->pi1_tracked and XiEv->pi2_tracked);
   if(suff.Contains("GoodLAndPi2Tracked")) ret = (XiEv->lgood and XiEv->pi2_tracked);
+  if(suff.Contains("ScatPTracked")) ret = (XiEv->p_scat_tracked);
+  if(suff.Contains("ScatPGood")) ret = (XiEv->p_scat_good);
+  if(suff.Contains("XiPflag")) ret = XiEv->XiPflag;
+  if(suff.Contains("GoodXiAndScatPGood")) ret = (XiEv->p_scat_good and XiEv->xigood);
   
   return ret;
 }
@@ -256,8 +260,12 @@ void FillHist(T* XiEv){
   TVector3 G4Pi2 = TVector3(XiEv->G4pi2mom_x, XiEv->G4pi2mom_y, XiEv->G4pi2mom_z);
   TVector3 G4L = TVector3(XiEv->G4lmom_x, XiEv->G4lmom_y, XiEv->G4lmom_z);
   TVector3 G4Xi = G4L + G4Pi2;
+  TVector3 G4XiProd = TVector3(XiEv->G4ximom_x, XiEv->G4ximom_y, XiEv->G4ximom_z);
+  TVector3 G4PScat = TVector3(XiEv->G4p_scatmom_x, XiEv->G4p_scatmom_y, XiEv->G4p_scatmom_z);
+  
   TVector3 G4DecayVtxL = TVector3(XiEv->G4pvtx_x, XiEv->G4pvtx_y, XiEv->G4pvtx_z);
   TVector3 G4DecayVtxXi = TVector3(XiEv->G4pi2vtx_x, XiEv->G4pi2vtx_y, XiEv->G4pi2vtx_z);
+  TVector3 G4ProdVtxXi = TVector3(XiEv->G4xivtx_x, XiEv->G4xivtx_y, XiEv->G4xivtx_z);
   if(G4Xi.Mag() < 1e-5) return;
   map<TString, vector<TVector3>> DataContainer = 
   {
@@ -270,6 +278,7 @@ void FillHist(T* XiEv){
     {"L",{G4L,G4Pi1,G4DecayVtxL}},
     #endif
     {"Xi",{G4Xi,G4Pi2,G4DecayVtxXi}},
+    {"ScatP",{G4PScat,G4XiProd,G4ProdVtxXi}}
   };
   for(auto t:triggers){
   for(auto suff:suffix){
@@ -320,23 +329,20 @@ void MakeEfficiencies(){
       {"GoodL", "PPi1Tracked"},
       {"GoodLAndPi2Tracked", "GoodL"},
       {"GoodXi", "GoodLAndPi2Tracked"},
+      {"GoodXiAndScatPGood", "GoodXi"},
 
       {"XiAcpt", "LAcpt"},
+      {"XiPflag", "XiAcpt"},
       {"GoodXi", "GoodL"},
       {"GoodL", "PPi1Tracked"},
       {"GoodXi", "AllTracked"}
     };
-		if(date == 260422){
-			EffConfs = {
-				{"GoodL","Gen"},
-				{"GoodXi","GoodL"}
-			};
-		}
     for(auto t:triggers){
       for(auto& [num, den]:EffConfs){
         MakeEff(num+t, den+t);
       }
-    }   }
+    }
+  }
 
 void
 SetBranches(TTree* tree){
@@ -378,9 +384,20 @@ SetBranches(TTree* tree){
 	tree->SetBranchStatus("G4xivtx_y",1);
 	tree->SetBranchStatus("G4xivtx_z",1);
 
+  tree->SetBranchStatus("G4p_scatmom",1);
+  tree->SetBranchStatus("G4p_scatmom_x",1);
+  tree->SetBranchStatus("G4p_scatmom_y",1);
+  tree->SetBranchStatus("G4p_scatmom_z",1);
+  tree->SetBranchStatus("G4p_scatvtx_x",1);
+  tree->SetBranchStatus("G4p_scatvtx_y",1);
+  tree->SetBranchStatus("G4p_scatvtx_z",1);
+
 	tree->SetBranchStatus("lgood",1);
 	tree->SetBranchStatus("xigood",1);
 	tree->SetBranchStatus("Xiflag",1);
+	tree->SetBranchStatus("XiPflag",1);
+  tree->SetBranchStatus("p_scat_tracked",1);
+  tree->SetBranchStatus("p_scat_good",1);
 	tree->SetBranchStatus("Pimflag",1);
 	tree->SetBranchStatus("Emptyflag",1);
 
@@ -406,6 +423,12 @@ SetBranches(TTree* tree){
   tree->SetBranchStatus("KFXiProductionVtx_x",1);
   tree->SetBranchStatus("KFXiProductionVtx_y",1);
   tree->SetBranchStatus("KFXiProductionVtx_z",1);
+  tree->SetBranchStatus("KFXiProductionVtxMom_x",1);
+  tree->SetBranchStatus("KFXiProductionVtxMom_y",1);
+  tree->SetBranchStatus("KFXiProductionVtxMom_z",1);
+  tree->SetBranchStatus("XiResidualsMom_x",1);
+  tree->SetBranchStatus("XiResidualsMom_y",1);
+  tree->SetBranchStatus("XiResidualsMom_z",1);
 
 }
 bool FileCheck(TString filename){

@@ -1,4 +1,4 @@
-#include "G4XiAcceptance.hh"
+#include "G4XiPScatAcceptance.hh"
 #include "TGraphErrors.h"
 #include <vector>
 double weight_th = 100;
@@ -10,7 +10,7 @@ vector<TString> CheckLists = {
 vector<TString> EventVars = {
     "ctau_L", "ctau_Xi", "CThKK", "SqrtS",
     "PolCTh", "PolCPhA", "PolCPhB", "PolCPhC",
-    "PolCThX", "PolCThZ"
+    "PolCThX", "PolCThZ", "MXiPScat", "CThXiPScat", "Collinearity"
 };
 TString Correction(TString part, TString num, TString den, TString v1, TString v2 = ""){
     TString suf;
@@ -67,6 +67,18 @@ TString SetEventVarAxis(TString var, int &nbinx, double &minx, double &maxx){
         axis = "cos#theta_{Z}";
         nbinx = 10; minx = -1; maxx = 1;
     }
+    else if(var == "MXiPScat"){
+        axis = "M_{#XiP} [GeV]";
+        nbinx = 20; minx = 1.3; maxx = 1.6;
+    }
+    else if(var == "CThXiPScat"){
+        axis = "cos#theta_{#XiP}";
+        nbinx = 20; minx = -1; maxx = 1;
+    }
+    else if(var == "Collinearity"){
+        axis = "Collinearity";
+        nbinx = 20; minx = 0.9; maxx = 1;
+    }
     return axis;
 }
 //map<TString, vector<TString>> CorrectionConf {
@@ -110,28 +122,14 @@ TString SetEventVarAxis(TString var, int &nbinx, double &minx, double &maxx){
         SecondaryCorrection["PolCPhA"] = gr_PhA;
     #endif
 #else// Carbon
-    #if date == 260422
-		CorrPars = {
-			{"GoodXi", "GoodL", "Pi2", {"CosTh","Ph"}},
-			{"GoodL", "Gen", "Pi1", {"CosTh","Ph"}}
-		};
-    #elif date >= 260817
-		CorrPars = {
-            {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosOpen"}},
-            {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"CosTh","Ph"}},
-            {"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
-            {"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
-            {"PTracked", "Gen", "P", {"CosTh", "Mom"}}
-		};
-    #else
-		CorrPars = {
-            {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"Ph","CosOpen"}},
-            {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"CosTh","Ph"}},
-            {"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
-            {"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
-            {"PTracked", "Gen", "P", {"Mom"}}
-		};
-    #endif
+    CorrPars = {
+        {"GoodXiAndScatPGood", "GoodXi", "ScatP", {"CosTh", "Mom"}},
+        {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosOpen"}},
+        {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"CosTh","Ph"}},
+        {"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
+        {"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
+        {"PTracked", "Gen", "P", {"CosTh", "Mom"}}
+    };
     #if SecondaryCorr
         #if date < 260806
             double p0 = 0.989681, p1 = -0.0194191;
@@ -156,7 +154,9 @@ map<TString, int> colorMap = {
     {"PPi1Tracked", kBlue},
     {"GoodL", kGreen+2},
     {"GoodLAndPi2Tracked", kMagenta},
-    {"GoodXi", kCyan+2}
+    {"GoodXi", kCyan+2},
+    {"GoodXiAndScatPTracked", kOrange+7},
+    {"GoodXiAndScatPGood", kViolet+7}
 };
 void InitializeTriggerCondtions(){
 #if TrigB
@@ -194,6 +194,7 @@ void InitializeCorrectionHistograms(TString tgt){
         TString num = cp.num;
         TString den = cp.den;
         bool num_acpt = 0, den_acpt = 0;
+        cout<<"Checking if "<<num<<" and "<<den<<" are in CheckLists..."<<endl;
         for(auto chk:CheckLists){
             if(chk == num) num_acpt = 1;
             if(chk == den) den_acpt = 1;
@@ -388,9 +389,9 @@ class Event{
     private:
         g4genfitcarbon* gf;
         TVector3 Km, Kp;
-        TVector3 P, Pi1, Pi2, L, Xi;
+        TVector3 P, Pi1, Pi2, L, Xi, XiProd, PScat;
         TVector3 VL,VXi,VXiProd;
-        TVector3 PRec, Pi1Rec, Pi2Rec, LRec, XiRec;
+        TVector3 PRec, Pi1Rec, Pi2Rec, LRec, XiRec, XiProdRec, PScatRec;
         TVector3 VLRec,VXiRec,VXiProdRec;
         map<TString, vector<TVector3>> DC;// DataContainer
         map<TString, vector<TVector3>> DCRec;// DataContainer
@@ -402,11 +403,13 @@ class Event{
             Pi2.SetXYZ(gf->G4pi2mom_x, gf->G4pi2mom_y, gf->G4pi2mom_z);
             L.SetXYZ(gf->G4lmom_x, gf->G4lmom_y, gf->G4lmom_z);
             Xi = L + Pi2;
+            XiProd.SetXYZ(gf->G4ximom_x, gf->G4ximom_y, gf->G4ximom_z);
+            PScat.SetXYZ(gf->G4p_scatmom_x, gf->G4p_scatmom_y, gf->G4p_scatmom_z); 
             VL.SetXYZ(gf->G4pvtx_x, gf->G4pvtx_y, gf->G4pvtx_z);
             VXi.SetXYZ(gf->G4pi2vtx_x, gf->G4pi2vtx_y, gf->G4pi2vtx_z);
             VXiProd.SetXYZ(gf->G4xivtx_x, gf->G4xivtx_y, gf->G4xivtx_z);
             Km.SetXYZ(gf->G4kmmom_x, gf->G4kmmom_y, gf->G4kmmom_z);
-            Kp.SetXYZ(gf->G4kpmom_x, gf->G4kpmom_y, gf->G4kpmom_z); 
+            Kp.SetXYZ(gf->G4kpmom_x, gf->G4kpmom_y, gf->G4kpmom_z);
             DC = {
                 {"P",{P,Pi1,VL}},
                 {"Pi1",{Pi1,P,VL}},
@@ -417,6 +420,7 @@ class Event{
                 {"L",{L,Pi1,VL}},
                 #endif
                 {"Xi",{Xi,Pi2,VXi}},
+                {"ScatP",{PScat,XiProd,VXiProd}}
             };
             if(gf->Xiflag){
                 PRec.SetXYZ(gf->KFXiDecaysMom_x->at(0), gf->KFXiDecaysMom_y->at(0), gf->KFXiDecaysMom_z->at(0));
@@ -424,9 +428,13 @@ class Event{
                 Pi2Rec.SetXYZ(gf->KFXiDecaysMom_x->at(2), gf->KFXiDecaysMom_y->at(2), gf->KFXiDecaysMom_z->at(2));
                 LRec.SetXYZ(gf->KFLambdaMom_x, gf->KFLambdaMom_y, gf->KFLambdaMom_z);
                 XiRec.SetXYZ(gf->KFXiMom_x, gf->KFXiMom_y, gf->KFXiMom_z);
+                XiProdRec.SetXYZ(gf->KFXiProductionVtxMom_x, gf->KFXiProductionVtxMom_y, gf->KFXiProductionVtxMom_z);
                 VLRec.SetXYZ(gf->GFLambdaDecayVtx_x, gf->GFLambdaDecayVtx_y, gf->GFLambdaDecayVtx_z);
                 VXiRec.SetXYZ(gf->GFXiDecayVtx_x, gf->GFXiDecayVtx_y, gf->GFXiDecayVtx_z);
                 VXiProdRec.SetXYZ(gf->KFXiProductionVtx_x, gf->KFXiProductionVtx_y, gf->KFXiProductionVtx_z);
+                if(gf->XiPflag){
+                    PScatRec.SetXYZ(gf->XiResidualsMom_x->at(0), gf->XiResidualsMom_y->at(0), gf->XiResidualsMom_z->at(0));
+                }
             }
             else{
                 PRec.SetXYZ(0,0,0);
@@ -434,6 +442,8 @@ class Event{
                 Pi2Rec.SetXYZ(0,0,0);
                 LRec.SetXYZ(0,0,0);
                 XiRec.SetXYZ(0,0,0);
+                XiProdRec.SetXYZ(0,0,0);
+                PScatRec.SetXYZ(0,0,0);
                 VLRec.SetXYZ(0,0,0);
                 VXiRec.SetXYZ(0,0,0);
                 VXiProdRec.SetXYZ(0,0,0);
@@ -448,6 +458,7 @@ class Event{
                 {"L",{LRec,Pi1Rec,VLRec}},
                 #endif
                 {"Xi",{XiRec,Pi2Rec,VXiRec}},
+                {"ScatP",{PScatRec,XiProdRec,VXiProdRec}}
             };
         }
         map<TString, vector<TVector3>> GetDataContainer(){
@@ -559,6 +570,27 @@ class Event{
                 PolaConverter PC(Km, Kp, Xi, L, P, Pi1, Pi2);
                 val = cos(PC.GetThetaZ());
             }
+            else if(var == "MXiPScat"){
+                TLorentzVector LVPScat(PScat, hypot(PScat.Mag(), mp));
+                TLorentzVector LVXiProd(XiProd, hypot(XiProd.Mag(), mXi));
+                auto LVXiPScat = LVPScat + LVXiProd;
+                val = LVXiPScat.M();
+            }
+            else if(var == "CThXiPScat"){
+                TLorentzVector LVPScat(PScat, hypot(PScat.Mag(), mp));
+                TLorentzVector LVXiProd(XiProd, hypot(XiProd.Mag(), mXi));
+                auto LVXiPScat = LVPScat + LVXiProd;
+                auto Boost = LVXiPScat.BoostVector();
+                LVPScat.Boost(-Boost);
+                TVector3 TVPScat = LVPScat.Vect();
+                TVector3 TVXiProd = LVXiProd.Vect();
+                val = cos(TVPScat.Angle(TVXiProd));
+            }
+            else if(var == "Collinearity"){
+                TVector3 TVL = L.Unit();
+                TVector3 TVXi = Xi.Unit();
+                val = TVL.Dot(TVXi);
+            }
             return val;
         }
         double GetEventVariableRec(TString var){
@@ -613,12 +645,36 @@ class Event{
                 PolaConverter PC(Km, Kp, XiRec, LRec, PRec, Pi1Rec, Pi2Rec);
                 val = cos(PC.GetThetaZ());
             }
+            else if(var == "MXiPScat"){
+                TLorentzVector LVPScat(PScatRec, hypot(PScatRec.Mag(), mp));
+                TLorentzVector LVXiProd(XiProdRec, hypot(XiProdRec.Mag(), mXi));
+                auto LVXiPScat = LVPScat + LVXiProd;
+                val = LVXiPScat.M();
+            }
+            else if(var == "CThXiPScat"){
+                TLorentzVector LVPScat(PScatRec, hypot(PScatRec.Mag(), mp));
+                TLorentzVector LVXiProd(XiProdRec, hypot(XiProdRec.Mag(), mXi));
+                auto LVXiPScat = LVPScat + LVXiProd;
+                auto Boost = LVXiPScat.BoostVector();
+                LVPScat.Boost(-Boost);
+                TVector3 TVPScat = LVPScat.Vect();
+                TVector3 TVXiProd = LVXiProd.Vect();
+                val = cos(TVPScat.Angle(TVXiProd));
+            }
+            else if(var == "Collinearity"){
+                TVector3 TVL = LRec.Unit();
+                TVector3 TVXi = XiRec.Unit();
+                val = TVL.Dot(TVXi);
+            }
             return val;
         }
 };
+bool DebugLog = 1;
 void FillHistograms(g4genfitcarbon* gf, TString tgt){
     Event event(gf, tgt);
+    if(DebugLog) cout<<Form("Processing event...")<<endl;
     if(!event.Good()) return;
+    if(DebugLog) cout<<Form("Loading event data...")<<endl;
     auto DC = event.GetDataContainer();
     auto DCRec = event.GetDataContainerRec();
     TString key;
@@ -629,12 +685,17 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
         TString num = cp.num;
         TString den = cp.den;
         TString pc = cp.p_cor;
+        if(DebugLog) cout<<Form("Applying correction for %s over %s...", num.Data(), den.Data())<<endl;
         vector<TString> var_cor = cp.var_cor;
         TString v1 = var_cor[0];
         TString v2 = var_cor.size() > 1 ? var_cor[1] : "";
+        if(DebugLog) cout<<"Loading Gen weight";
         weight *= event.GetWeight(pc, num, den, v1, v2);
-        if(gf->Xiflag){
+        if(DebugLog) cout<<Form(" for %s over %s: w = %g", num.Data(), den.Data(), w)<<endl;
+        if(gf->XiPflag){
+            if(DebugLog) cout<<"Loading weight";
             double w = event.GetWeightRec(pc, num, den, v1, v2);
+            if(DebugLog) cout<<Form(" for %s over %s: w = %g", num.Data(), den.Data(), w)<<endl;
             if(w > weight_th or isnan(w)){
                 double var1 = GetVariable(DCRec[pc][0], DCRec[pc][1], DCRec[pc][2], v1);
                 double var2 = v2 != "" ? GetVariable(DCRec[pc][0], DCRec[pc][1], DCRec[pc][2], v2) : 0;
@@ -670,6 +731,7 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
         for(int iv=0;iv<variable.size();++iv){
             auto v = variable[iv];
             for(auto chk: CheckLists){
+                if(DebugLog) cout<<Form("Filling histograms for particle %s, variable %s, check %s...", p.Data(), v.Data(), chk.Data())<<endl;
                 if(!SuffixCheck(chk, gf)) continue;
                 if(!TrigCheck(trig, gf)) continue;
                 key = AcceptanceHistTitle1D(tgt, p, v, chk);
@@ -703,15 +765,16 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
             }
         }
             }//chk
-            if(SuffixCheck("XiAcpt", gf)){
-                key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt" + trig);
+            if(SuffixCheck("XiPflag", gf)){
+                if(DebugLog) cout<<Form("Filling histograms for particle %s, variable %s, XiPflag...", p.Data(), v.Data())<<endl;
+                key = AcceptanceHistTitle1D(tgt, p, v, "XiPflag" + trig);
                 hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v));
-                key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor" + trig);
+                key = AcceptanceHistTitle1D(tgt, p, v, "XiPflagCor" + trig);
                 hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v), weight);
                 if(weightRec < weight_th and !isnan(weightRec)){
-                    key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcpt" + trig);
+                    key = AcceptanceHistTitle1D(tgt, p, v, "XiPflagRec" + trig);
                     hMap[key]->Fill(GetVariable(DCRec[p][0], DCRec[p][1],DCRec[p][2], v));
-                    key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcptCor" + trig);
+                    key = AcceptanceHistTitle1D(tgt, p, v, "XiPflagRecCor" + trig);
                     hMap[key]->Fill(GetVariable(DCRec[p][0], DCRec[p][1],DCRec[p][2], v), weightRec);
                     if(!filled_weight){
                         hMap["h_weight"]->Fill(weightRec);
@@ -719,8 +782,9 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
                     }
                 }
             }
-            if(SuffixCheck("GoodXi", gf)){
-                key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor" + trig);
+            if(SuffixCheck("GoodXiAndScatPGood", gf)){
+                if(DebugLog) cout<<Form("Filling histograms for particle %s, variable %s, GoodXiAndScatPGood...", p.Data(), v.Data())<<endl;
+                key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiAndScatPGoodCor" + trig);
                 if(weightRec < weight_th and !isnan(weightRec)){
                     hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v), weight);
                 }
@@ -748,20 +812,20 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
                 }
             }
         }
-        if(SuffixCheck("XiAcpt", gf)){
-            key = EventTitle(tgt, ev, "XiAcpt" + trig);
+        if(SuffixCheck("XiPflag", gf)){
+            key = EventTitle(tgt, ev, "XiPflag" + trig);
             hMap[key]->Fill(event.GetEventVariable(ev));
-            key = EventTitle(tgt, ev, "XiAcptCor" + trig);
+            key = EventTitle(tgt, ev, "XiPflagCor" + trig);
             hMap[key]->Fill(event.GetEventVariable(ev), weight);
             if(weightRec < weight_th and !isnan(weightRec)){
-                key = EventTitle(tgt, ev, "XiRecAcpt" + trig);
+                key = EventTitle(tgt, ev, "XiPflagRec" + trig);
                 hMap[key]->Fill(event.GetEventVariableRec(ev));
-                key = EventTitle(tgt, ev, "XiRecAcptCor" + trig);
+                key = EventTitle(tgt, ev, "XiPflagRecCor" + trig);
                 hMap[key]->Fill(event.GetEventVariableRec(ev), weightRec);
             }
         }
-        if(SuffixCheck("GoodXi", gf)){
-            key = EventTitle(tgt, ev, "GoodXiCor" + trig);
+        if(SuffixCheck("GoodXiAndScatPGood", gf)){
+            key = EventTitle(tgt, ev, "GoodXiAndScatPGoodCor" + trig);
             if(weight < weight_th and !isnan(weight)){
                 hMap[key]->Fill(event.GetEventVariable(ev), weight);
             }
@@ -798,7 +862,7 @@ void NormalizeHistograms(TString tgt){
             hMap[key]->SetMarkerColor(kOrange+7);
             hMap[key]->SetMarkerStyle(20);
 
-            key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor"+trig);
+            key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiAndScatPGoodCor"+trig);
             hMap[key]->Scale(1./maxi);
             hMap[key]->SetLineColor(kGreen+2);
             hMap[key]->SetMarkerColor(kGreen+2);
@@ -851,7 +915,7 @@ void NormalizeHistograms(TString tgt){
         hMap[key]->SetLineColor(kOrange+7);
         hMap[key]->SetMarkerColor(kOrange+7);
         hMap[key]->SetMarkerStyle(20);
-        key = EventTitle(tgt, ev, "GoodXiCor"+trig);
+        key = EventTitle(tgt, ev, "GoodXiAndScatPGoodCor"+trig);
         hMap[key]->Scale(1./maxi);
         hMap[key]->SetLineColor(kGreen+2);
         hMap[key]->SetMarkerColor(kGreen+2);

@@ -1,7 +1,9 @@
 leg
+legacy
 .DS_Store
 figs*
 Maps*
 rootfiles*
 *.swp
 *tar.gz
+buffer
