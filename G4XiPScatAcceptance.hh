@@ -2,6 +2,9 @@
 #include "Include/XiPScatEfficiency.hh"
 #include "Include/PolarizationAnal.hh"
 using namespace std;
+#include <stdexcept>
+#include <limits>
+#include <TNamed.h>
 //#include "G4PolaBranches.hh"
 double thr_weight = 20; // cut under 5%
 
@@ -39,26 +42,32 @@ double GFltarget_distcut = 25.;
 double ltarget_distcut = 25.;
 double GFltarget_ycut = 20.;
 
+bool XiPOfflineFlag(g4genfitcarbon* XiEv){
+  if(XiEv->XiPflag and XiEv->XipVtxDist < 5)
+    return true;
+  return false;
+}
 
+// Use the standard Xi definitions; proton truth flags are MC-only.
 bool SuffixCheck(TString suff, g4genfitcarbon* XiEv){
-  bool ret = false;
-  if(suff.Contains("Gen")) ret = 1;
-  if(suff.Contains("LAcpt")) ret = (XiEv->lgood or XiEv->Xiflag);
-  if(suff.Contains("GoodL")) ret = XiEv->lgood;
-  if(suff.Contains("XiAcpt")) ret = XiEv->Xiflag;
-  if(suff.Contains("GoodXi")) ret = XiEv->xigood;
-  if(suff.Contains("PTracked")) ret = XiEv->p_tracked;
-  if(suff.Contains("Pi1Tracked")) ret = XiEv->pi1_tracked;
-  if(suff.Contains("Pi2Tracked")) ret = XiEv->pi2_tracked;
-  if(suff.Contains("PPi1Tracked")) ret = (XiEv->p_tracked and XiEv->pi1_tracked);
-  if(suff.Contains("AllTracked")) ret = (XiEv->p_tracked and XiEv->pi1_tracked and XiEv->pi2_tracked);
-  if(suff.Contains("GoodLAndPi2Tracked")) ret = (XiEv->lgood and XiEv->pi2_tracked);
-  if(suff.Contains("ScatPTracked")) ret = (XiEv->p_scat_tracked);
-  if(suff.Contains("ScatPGood")) ret = (XiEv->p_scat_good);
-  if(suff.Contains("XiPflag")) ret = XiEv->XiPflag;
-  if(suff.Contains("GoodXiAndScatPGood")) ret = (XiEv->p_scat_good and XiEv->xigood);
-  
-  return ret;
+  suff.ReplaceAll("TrigB", "");
+  if(suff == "Gen") return true;
+  if(suff == "LAcpt") return XiEv->lgood or XiEv->Xiflag;
+  if(suff == "GoodL") return XiEv->lgood;
+  if(suff == "XiAcpt") return XiEv->Xiflag;
+  if(suff == "GoodXi") return XiEv->xigood;
+  if(suff == "PTracked") return XiEv->p_tracked;
+  if(suff == "Pi1Tracked") return XiEv->pi1_tracked;
+  if(suff == "Pi2Tracked") return XiEv->pi2_tracked;
+  if(suff == "PPi1Tracked") return XiEv->p_tracked and XiEv->pi1_tracked;
+  if(suff == "AllTracked") return XiEv->p_tracked and XiEv->pi1_tracked and XiEv->pi2_tracked;
+  if(suff == "GoodLAndPi2Tracked") return XiEv->lgood and XiEv->pi2_tracked;
+  if(suff == "ScatPTracked") return XiEv->p_scat_tracked;
+  if(suff == "ScatPGood") return XiEv->p_scat_good and XiPOfflineFlag(XiEv);
+  if(suff == "GoodXiAndScatPTracked") return XiEv->xigood and XiEv->p_scat_tracked and XiPOfflineFlag(XiEv);
+  if(suff == "GoodXiAndScatPGood") return XiEv->xigood and XiEv->p_scat_good and XiPOfflineFlag(XiEv);
+  if(suff == "XiPflag") return XiPOfflineFlag(XiEv);
+  return false;
 }
 bool TrigCheck(TString Trig, g4genfitcarbon* XiEv){
   bool ret = false;
@@ -75,13 +84,16 @@ TString SetAxis(TString part, TString var, int& bin, double& min, double& max){
     if(part.Contains("Pi")){
       bin = nbinMom; min = minMomPi; max = maxMomPi;
     }
+    else if(part == "ScatP"){
+      bin = nbinMom; min = 0; max = maxMomP;
+    }
     else if(part.Contains("L") or part.Contains("Xi") or part.Contains("P")){
       bin = nbinMom; min = minMomL; max = maxMomL;
     }
   }
   else if(var == "CosTh"){
     axis = "cos#theta";
-    if(part.Contains("Pi")){
+    if(part.Contains("Pi") or part == "ScatP"){
       bin = nbinCosTh; min = minCosTh; max = maxCosTh;
     }
     else{
@@ -111,6 +123,22 @@ TString SetAxis(TString part, TString var, int& bin, double& min, double& max){
   return axis;
 };
 
+void ResetXiPScatHistograms(){
+  for(auto hist:hMap) delete hist.second;
+  for(auto hist:hMap2D) delete hist.second;
+  for(auto eff:effMap) delete eff.second;
+  hMap = CheckedMap<TH1>();
+  hMap2D = CheckedMap<TH1>();
+  effMap = CheckedMap<TEfficiency>();
+  TH1::AddDirectory(false);
+  TH1::SetDefaultSumw2(true);
+}
+TH1* ReadXiPScatHistogram(TFile* file, TString key){
+  if(file == nullptr or file->IsZombie()) throw runtime_error("Cannot read Xi-p histogram file.");
+  TH1* hist = dynamic_cast<TH1*>(file->Get(key));
+  if(hist == nullptr) throw runtime_error(string("Missing histogram: ") + key.Data());
+  return hist;
+}
 void InitializeHistograms(){
   int nbin, nbinx, nbiny;
   double minx, maxx, miny, maxy;
@@ -161,22 +189,26 @@ void InitializeHistograms(){
   }//trigger
 }
 void LoadOrAdd1DHistogram(TString key, TFile* file){
-    if(hMap.find(key) == hMap.end()){
-        hMap[key] = (TH1*)file->Get(key);
-    }
-    else{
-        hMap[key] ->Add((TH1*)file->Get(key));
-    }
+  TH1* hist = ReadXiPScatHistogram(file, key);
+  if(hMap.find(key) == hMap.end()){
+    hMap[key] = (TH1*)hist->Clone(key);
+    hMap[key]->SetDirectory(nullptr);
+  }
+  else hMap[key]->Add(hist);
 }
 void LoadOrAdd2DHistogram(TString key, TFile* file){
-    if(hMap2D.find(key) == hMap2D.end()){
-        hMap2D[key] = (TH2*)file->Get(key);
-    }
-    else{
-        hMap2D[key] ->Add((TH2*)file->Get(key));
-    }
+  TH1* hist = ReadXiPScatHistogram(file, key);
+  if(hMap2D.find(key) == hMap2D.end()){
+    hMap2D[key] = (TH1*)hist->Clone(key);
+    hMap2D[key]->SetDirectory(nullptr);
+  }
+  else hMap2D[key]->Add(hist);
 }
 void LoadHistograms(TFile* file){
+  if(file == nullptr or file->IsZombie()) throw runtime_error("Cannot read map worker file.");
+  TNamed* format = dynamic_cast<TNamed*>(file->Get("XiPScatMapFormat"));
+  if(format == nullptr or TString(format->GetTitle()) != "XiPScat_StandardXi_20261006")
+    throw runtime_error("Old Xi-p histogram worker. Regenerate maps with the revised macros.");
   cout<<"Loading Histograms from "<<file->GetName()<<endl;
   for(auto t:triggers){
   for(auto s:suffix){
@@ -220,7 +252,7 @@ void FillParticle(TVector3 P1, TVector3 P2, TVector3 V, TString pre, TString par
   for(int iv1=0;iv1<variable.size();++iv1){
     auto v1 = variable[iv1];
     key = AcceptanceHistTitle1D("G4", part, v1, suff);
-    var = GetVariable(P1, P2, V, v1);
+    var = GetXiPVariable(P1, P2, V, part, v1);
   #if Debug
     cout<<"Filling "<<key<<endl;
   #endif
@@ -232,7 +264,7 @@ void FillParticle(TVector3 P1, TVector3 P2, TVector3 V, TString pre, TString par
     }
     for(int iv2 = iv1+1;iv2<variable.size();++iv2){
       key = AcceptanceHistTitle2D("G4", part, v1, variable[iv2], suff);
-      double var2 = GetVariable(P1, P2, V, variable[iv2]);
+      double var2 = GetXiPVariable(P1, P2, V, part, variable[iv2]);
 #if Debug
     cout<<"Filling "<<key<<endl;
 #endif
@@ -294,56 +326,27 @@ void FillHist(T* XiEv){
 }
 
 void MakeEfficiencies(){
-    for(auto t:triggers){
+  for(auto t:triggers){
     for(auto s:suffix){
-      if(s == "Gen") continue;
-      MakeEff(s, "Gen");
-      MakeEff(s+t, "Gen");
-      MakeEff(s+t, "Gen"+t);
-    }
-    } 
-    //Correction Starategy:
-    // 1. Gen -> P or Pi1Tracked // p or pi1 kinematics
-    // 2. P or Pi1Tracked -> PPi1 Tracked // pi1 or p kinematics
-    // 3-a. PPi1Tracked -> GoodL // L kinematics?
-    // 4-a. GoodL -> GoodLAndPi2Tracked // pi2 kinematics
-    // 5-a. GoodLAndPi2Tracked -> GoodXi // Xi kinematics?
-    //
-    // 3-b. PPi1Tracked -> AllTracked // pi2 kinematics
-    // 4-b. AllTracked -> GoodXi // Xi kinematics? 
-   
-    //
-    //
-    //   Gen = Gen / PTracked (P) * PTracked / PPi1Tracked(Pi1) * PPi1Tracked / GoodL (L) * GoodL / GoodLAndPi2Tracked (Pi2) * GoodLAndPi2Tracked / GoodXi (Xi)
-    //
-    //
-    vector<pair<TString, TString>> EffConfs = {// Numerator, Denominator for additional efficiency calculation.
-      {"PPi1Tracked", "PTracked"},
-      {"PPi1Tracked", "Pi1Tracked"},
-
-      {"AllTracked", "PTracked"},
-      {"AllTracked", "Pi1Tracked"},
-      {"AllTracked", "PPi1Tracked"},
-      {"AllTracked", "Pi2Tracked"},
-
-      {"GoodL", "PPi1Tracked"},
-      {"GoodLAndPi2Tracked", "GoodL"},
-      {"GoodXi", "GoodLAndPi2Tracked"},
-      {"GoodXiAndScatPGood", "GoodXi"},
-
-      {"XiAcpt", "LAcpt"},
-      {"XiPflag", "XiAcpt"},
-      {"GoodXi", "GoodL"},
-      {"GoodL", "PPi1Tracked"},
-      {"GoodXi", "AllTracked"}
-    };
-    for(auto t:triggers){
-      for(auto& [num, den]:EffConfs){
-        MakeEff(num+t, den+t);
-      }
+      if(s != "Gen") MakeEff(s+t, "Gen"+t);
     }
   }
-
+  // The same five Xi factors, followed by one conditional proton factor.
+  // XiPflag is an observed candidate sample, not an extra truth-matched factor.
+  vector<pair<TString, TString>> EffConfs = {
+    {"PPi1Tracked", "PTracked"}, {"PPi1Tracked", "Pi1Tracked"},
+    {"AllTracked", "PTracked"}, {"AllTracked", "Pi1Tracked"},
+    {"AllTracked", "PPi1Tracked"}, {"AllTracked", "Pi2Tracked"},
+    {"GoodL", "PPi1Tracked"}, {"GoodLAndPi2Tracked", "GoodL"},
+    {"GoodXi", "GoodLAndPi2Tracked"},
+    {"GoodXiAndScatPGood", "GoodXi"},
+    {"GoodXiAndScatPTracked", "GoodXi"}, // MC diagnostic only.
+    {"XiAcpt", "LAcpt"}, {"GoodXi", "GoodL"}, {"GoodXi", "AllTracked"}
+  };
+  for(auto t:triggers){
+    for(auto conf:EffConfs) MakeEff(conf.first+t, conf.second+t);
+  }
+}
 void
 SetBranches(TTree* tree){
 	tree->SetBranchStatus("*",0);
@@ -430,19 +433,15 @@ SetBranches(TTree* tree){
   tree->SetBranchStatus("XiResidualsMom_y",1);
   tree->SetBranchStatus("XiResidualsMom_z",1);
 
+  tree->SetBranchStatus("XipVtxScatPMom_x",1);
+  tree->SetBranchStatus("XipVtxScatPMom_y",1);
+  tree->SetBranchStatus("XipVtxScatPMom_z",1);
+  tree->SetBranchStatus("XipVtxDist",1);
+
 }
 bool FileCheck(TString filename){
-    bool val = 1;
-    TFile file(filename, "READ");
-    if(file.IsZombie()){
-        cout<<"File "<<filename<<" is not found!"<<endl;
-        val = 0;
-    }
-    if(!file.Get("tpc")){
-        cout<<"File "<<filename<<" does not contain tpc tree!"<<endl;
-        val = 0;
-    }
-    file.Close();
-    return val;
-
+  TFile* file = TFile::Open(filename);
+  bool ok = file != nullptr and !file->IsZombie() and !file->TestBit(TFile::kRecovered);
+  if(file != nullptr){ file->Close(); delete file; }
+  return ok;
 }

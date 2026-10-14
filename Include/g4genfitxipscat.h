@@ -1,12 +1,12 @@
 //////////////////////////////////////////////////////////
 // This class has been automatically generated on
-// Thu Oct  1 11:25:20 2026 by ROOT version 6.32.04
+// Wed Oct 14 20:15:38 2026 by ROOT version 6.32.04
 // from TTree tpc/tree of GenfitCarbon
-// found on file: /home/had/kangbm/rootfiles/Geant4Prod/XiPScat/XiPScatReconProd_P_0_0_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root
+// found on file: /home/had/kangbm/rootfiles/Geant4Prod/XiPScat/XiPScatReconProd_P_1_0_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root
 //////////////////////////////////////////////////////////
 
-#ifndef g4genfitcarbon_h
-#define g4genfitcarbon_h
+#ifndef g4genfitxipscat_h
+#define g4genfitxipscat_h
 
 #include <TROOT.h>
 #include <TChain.h>
@@ -17,7 +17,7 @@
 #include "vector"
 #include "vector"
 
-class g4genfitcarbon {
+class g4genfitxipscat {
 public :
    TTree          *fChain;   //!pointer to the analyzed TTree or TChain
    Int_t           fCurrent; //!current Tree number in a TChain
@@ -589,8 +589,22 @@ public :
    Double_t        GFXiTargetCenterMom_z;
    Double_t        GFXiTargetCenterCloseDist;
    Bool_t          XiPflag;
-   Double_t        KFXipExcitation;
+   Bool_t          XiPExtrapFlag;
+   Double_t        XipExcitation;
    Double_t        XipMass;
+   Double_t        XipVtxChisqr;
+   Double_t        XipVtxDist;
+   Double_t        XipVtxXiMom;
+   Double_t        XipVtxXiMom_x;
+   Double_t        XipVtxXiMom_y;
+   Double_t        XipVtxXiMom_z;
+   Double_t        XipVtx_x;
+   Double_t        XipVtx_y;
+   Double_t        XipVtx_z;
+   Double_t        XipVtxScatPMom;
+   Double_t        XipVtxScatPMom_x;
+   Double_t        XipVtxScatPMom_y;
+   Double_t        XipVtxScatPMom_z;
    Double_t        XiMass_Alt;
    Double_t        G4XiMass_Alt;
    Double_t        XiDecayVtx_x_Alt;
@@ -2164,8 +2178,22 @@ public :
    TBranch        *b_GFXiTargetCenterMom_z;   //!
    TBranch        *b_GFXiTargetCenterCloseDist;   //!
    TBranch        *b_XiPflag;   //!
-   TBranch        *b_KFXipExcitation;   //!
+   TBranch        *b_XiPExtrapFlag;   //!
+   TBranch        *b_XipExcitation;   //!
    TBranch        *b_XipMass;   //!
+   TBranch        *b_XipVtxChisqr;   //!
+   TBranch        *b_XipVtxDist;   //!
+   TBranch        *b_XipVtxXiMom;   //!
+   TBranch        *b_XipVtxXiMom_x;   //!
+   TBranch        *b_XipVtxXiMom_y;   //!
+   TBranch        *b_XipVtxXiMom_z;   //!
+   TBranch        *b_XipVtx_x;   //!
+   TBranch        *b_XipVtx_y;   //!
+   TBranch        *b_XipVtx_z;   //!
+   TBranch        *b_XipVtxScatPMom;   //!
+   TBranch        *b_XipVtxScatPMom_x;   //!
+   TBranch        *b_XipVtxScatPMom_y;   //!
+   TBranch        *b_XipVtxScatPMom_z;   //!
    TBranch        *b_XiMass_Alt;   //!
    TBranch        *b_G4XiMass_Alt;   //!
    TBranch        *b_XiDecayVtx_x_Alt;   //!
@@ -3174,8 +3202,8 @@ public :
    TBranch        *b_GammaDecayVtx_y;   //!
    TBranch        *b_GammaDecayVtx_z;   //!
 
-   g4genfitcarbon(TTree *tree=0);
-   virtual ~g4genfitcarbon();
+   g4genfitxipscat(TTree *tree=0);
+   virtual ~g4genfitxipscat();
    virtual Int_t    Cut(Long64_t entry);
    virtual Int_t    GetEntry(Long64_t entry);
    virtual Long64_t LoadTree(Long64_t entry);
@@ -3186,14 +3214,14 @@ public :
 
 #endif
 
-g4genfitcarbon::g4genfitcarbon(TTree *tree) : fChain(0) 
+g4genfitxipscat::g4genfitxipscat(TTree *tree) : fChain(0) 
 {
 // if parameter tree is not specified (or zero), connect the file
 // used to generate this class and read the Tree.
    if (tree == 0) {
-      TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject("/home/had/kangbm/rootfiles/Geant4Prod/XiPScat/XiPScatReconProd_P_0_0_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root");
+      TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject("/home/had/kangbm/rootfiles/Geant4Prod/XiPScat/XiPScatReconProd_P_1_0_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root");
       if (!f || !f->IsOpen()) {
-         f = new TFile("/home/had/kangbm/rootfiles/Geant4Prod/XiPScat/XiPScatReconProd_P_0_0_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root");
+         f = new TFile("/home/had/kangbm/rootfiles/Geant4Prod/XiPScat/XiPScatReconProd_P_1_0_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root");
       }
       f->GetObject("tpc",tree);
 
@@ -3201,19 +3229,19 @@ g4genfitcarbon::g4genfitcarbon(TTree *tree) : fChain(0)
    Init(tree);
 }
 
-g4genfitcarbon::~g4genfitcarbon()
+g4genfitxipscat::~g4genfitxipscat()
 {
    if (!fChain) return;
    delete fChain->GetCurrentFile();
 }
 
-Int_t g4genfitcarbon::GetEntry(Long64_t entry)
+Int_t g4genfitxipscat::GetEntry(Long64_t entry)
 {
 // Read contents of entry.
    if (!fChain) return 0;
    return fChain->GetEntry(entry);
 }
-Long64_t g4genfitcarbon::LoadTree(Long64_t entry)
+Long64_t g4genfitxipscat::LoadTree(Long64_t entry)
 {
 // Set the environment to read one entry
    if (!fChain) return -5;
@@ -3226,7 +3254,7 @@ Long64_t g4genfitcarbon::LoadTree(Long64_t entry)
    return centry;
 }
 
-void g4genfitcarbon::Init(TTree *tree)
+void g4genfitxipscat::Init(TTree *tree)
 {
    // The Init() function is called when the selector needs to initialize
    // a new tree or chain. Typically here the branch addresses and branch
@@ -4535,8 +4563,22 @@ void g4genfitcarbon::Init(TTree *tree)
    fChain->SetBranchAddress("GFXiTargetCenterMom_z", &GFXiTargetCenterMom_z, &b_GFXiTargetCenterMom_z);
    fChain->SetBranchAddress("GFXiTargetCenterCloseDist", &GFXiTargetCenterCloseDist, &b_GFXiTargetCenterCloseDist);
    fChain->SetBranchAddress("XiPflag", &XiPflag, &b_XiPflag);
-   fChain->SetBranchAddress("KFXipExcitation", &KFXipExcitation, &b_KFXipExcitation);
+   fChain->SetBranchAddress("XiPExtrapFlag", &XiPExtrapFlag, &b_XiPExtrapFlag);
+   fChain->SetBranchAddress("XipExcitation", &XipExcitation, &b_XipExcitation);
    fChain->SetBranchAddress("XipMass", &XipMass, &b_XipMass);
+   fChain->SetBranchAddress("XipVtxChisqr", &XipVtxChisqr, &b_XipVtxChisqr);
+   fChain->SetBranchAddress("XipVtxDist", &XipVtxDist, &b_XipVtxDist);
+   fChain->SetBranchAddress("XipVtxXiMom", &XipVtxXiMom, &b_XipVtxXiMom);
+   fChain->SetBranchAddress("XipVtxXiMom_x", &XipVtxXiMom_x, &b_XipVtxXiMom_x);
+   fChain->SetBranchAddress("XipVtxXiMom_y", &XipVtxXiMom_y, &b_XipVtxXiMom_y);
+   fChain->SetBranchAddress("XipVtxXiMom_z", &XipVtxXiMom_z, &b_XipVtxXiMom_z);
+   fChain->SetBranchAddress("XipVtx_x", &XipVtx_x, &b_XipVtx_x);
+   fChain->SetBranchAddress("XipVtx_y", &XipVtx_y, &b_XipVtx_y);
+   fChain->SetBranchAddress("XipVtx_z", &XipVtx_z, &b_XipVtx_z);
+   fChain->SetBranchAddress("XipVtxScatPMom", &XipVtxScatPMom, &b_XipVtxScatPMom);
+   fChain->SetBranchAddress("XipVtxScatPMom_x", &XipVtxScatPMom_x, &b_XipVtxScatPMom_x);
+   fChain->SetBranchAddress("XipVtxScatPMom_y", &XipVtxScatPMom_y, &b_XipVtxScatPMom_y);
+   fChain->SetBranchAddress("XipVtxScatPMom_z", &XipVtxScatPMom_z, &b_XipVtxScatPMom_z);
    fChain->SetBranchAddress("XiMass_Alt", &XiMass_Alt, &b_XiMass_Alt);
    fChain->SetBranchAddress("G4XiMass_Alt", &G4XiMass_Alt, &b_G4XiMass_Alt);
    fChain->SetBranchAddress("XiDecayVtx_x_Alt", &XiDecayVtx_x_Alt, &b_XiDecayVtx_x_Alt);
@@ -5547,7 +5589,7 @@ void g4genfitcarbon::Init(TTree *tree)
    Notify();
 }
 
-bool g4genfitcarbon::Notify()
+bool g4genfitxipscat::Notify()
 {
    // The Notify() function is called when a new file is opened. This
    // can be either for a new TTree in a TChain or when when a new TTree
@@ -5558,14 +5600,14 @@ bool g4genfitcarbon::Notify()
    return true;
 }
 
-void g4genfitcarbon::Show(Long64_t entry)
+void g4genfitxipscat::Show(Long64_t entry)
 {
 // Print contents of entry.
 // If entry is not specified, print current entry
    if (!fChain) return;
    fChain->Show(entry);
 }
-Int_t g4genfitcarbon::Cut(Long64_t entry)
+Int_t g4genfitxipscat::Cut(Long64_t entry)
 {
 // This function may be called from Loop.
 // returns  1 if entry is accepted.

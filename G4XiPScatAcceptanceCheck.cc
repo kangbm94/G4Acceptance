@@ -4,11 +4,18 @@
 #define TrigB 0
 #define Recon 1
 #define CH2 0
-#define date 261001
+#define Debug 0
+#define date 261006
+#define date_map 261006
 #define PosShift 1
 #define SecondaryCorr 0
+// Final XiPflag overlays: reconstructed or generated kinematics (both may be drawn).
+#ifndef DrawResSmeared
 #define DrawResSmeared 1
+#endif
+#ifndef DrawGeneValue
 #define DrawGeneValue 0
+#endif
 #include "G4XiPScatAcceptanceCheck.hh"
 #include <TCanvas.h>
 TString WAcc,Target,Conf,LVtxConf,filename,figdir_base,file_dir, bufdir, fmap_dir,fmap_name;
@@ -22,113 +29,90 @@ double left_margin = 0.1, right_margin = 0.05, top_margin = 0.05, bottom_margin 
 double offset_x = 0.8, offset_y = 0.8;
 double tsize = 0.09, lsize = 0.06;
 void G4XiPScatAcceptanceCheck(){
-  cout<<"Setting configurations..."<<endl;
   WAcc = "_WB";
-  figdir_base = Form("figs_%d/%s/", date,tgt.Data());
-  if(TrigB){
-    figdir_base.ReplaceAll("figs","figs_TrigB");
-  }
-#if PerXiDist
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
-  bufdir.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
-#endif
-#if PerDist
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
-  bufdir.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
-#endif
-#if CH2
-  file_dir = "rootfiles/Geant4CH2/6mmShift/wo_upstream_search/";
-  Conf = "CH26mmShift";
-  Target = "CH2";
-#else
-  file_dir = "rootfiles/Geant4Prod/XiPScat/";
   Conf = "ProdXiPScat6mmShift";
   Target = "Carbon";
+  tgt = Target;
+  LVtxConf = LVtxIsXi ? "_LVtxIsXi" : "";
+  if(file_dir == "") file_dir = "rootfiles/Geant4Prod/XiPScat/";
+  if(fmap_dir == "") fmap_dir = "./Maps/";
+  if(!fmap_dir.EndsWith("/")) fmap_dir += "/";
+  if(fmap_name == "") fmap_name = Form("%sXiPScat_Recon_P0_%s%s_6mmShifted_%d.root",Target.Data(),LVtxConf.Data(),WAcc.Data(),date_map);
+  if(bufdir == "") bufdir = fmap_dir+Form("buf/%s/%d/Check/",Conf.Data(),date);
+  if(!bufdir.EndsWith("/")) bufdir += "/";
+  if(figdir_base == ""){
+    figdir_base = Form("figs_%d/%sXiPScat/",date,tgt.Data());
+#if TrigB
+    figdir_base.ReplaceAll("figs", "figs_TrigB");
 #endif
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
-  bufdir.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
-  fmap_dir = "./Maps/";
-  bufdir = fmap_dir + Form("buf/%s/%d/",Conf.Data(),date);
-  if(test_run){
-    figdir_base.ReplaceAll(tgt,tgt + "_testrun");
+#if PerXiDist
+    figdir_base.ReplaceAll(tgt, tgt+"_PerXiDist");
+#endif
+#if PerDist
+    figdir_base.ReplaceAll(tgt, tgt+"_PerDist");
+#endif
+#if PosShift
+    figdir_base.ReplaceAll(tgt, tgt+"_6mmShift");
+#endif
+#if LVtxIsXi
+    figdir_base.ReplaceAll(tgt, tgt+"_LVtxIsXi");
+#endif
+    if(test_run) figdir_base.ReplaceAll(tgt, tgt+"_testrun");
   }
-  LVtxConf = "_LVtxIsXi";
-  figdir_base.ReplaceAll(tgt.Data(),(tgt + LVtxConf ).Data());
-#if SecondaryCorr
-  figdir_base.ReplaceAll(tgt.Data(),(tgt + "_SecondaryCorr").Data());
-  bufdir.ReplaceAll(tgt.Data(),(tgt + "_SecondaryCorr").Data());
-#endif
-  cout<<"=======Usage======"<<endl;
-  cout<<"G4XiPScatAcceptanceCheck(i,frac,ndiv) : Run the analysis for file index i, with fraction frac of ndiv parts"<<endl;
-  cout<<"CheckAcceptanceAll() : Check the acceptance for all files"<<endl;
+  if(!figdir_base.EndsWith("/")) figdir_base += "/";
+  cout<<"G4XiPScatAcceptanceCheck(i,frac,ndiv): standard Xi-style closure worker"<<endl;
+  cout<<"CheckAcceptanceAll(nfile,ndiv): merge and draw (default 10,10)"<<endl;
+  cout<<"Optional fourth worker argument: BestCorrections.tsv"<<endl;
 }
-
-void G4XiPScatAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
-  if(file_dir == "") G4XiPScatAcceptanceCheck();
-  SetStyle();
-  TChain* tree = new TChain("tpc");
-  cout<<"Loading files..."<<endl;
-#if CH2
-  filename = Form("XiReconCH2_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
-#else
-  filename = Form("XiPScatReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root",i);
-#endif
-  if(FileCheck(file_dir+filename) == 0){
-    cout<<"File "<<filename<<" not found. Exiting..."<<endl;
-    return;
-  }
-  cout<<"Accpt file"<<endl;
-#if CH2
-  TFile* acpt_file;
-  #if LVtxIsXi
-    acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260729));
-    #if date >= 260817
-      acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260817));
-    #endif
-  #else
-    //acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
-  #endif
-#else
-  TFile* acpt_file;
-  fmap_dir = "./Maps/";
-  fmap_name = Form("%sXiPScat_Recon_P0_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
-  acpt_file = TFile::Open(fmap_dir + fmap_name);
-#endif
-  cout<<Form("Run %d, Target: %s, Date: %d", i,tgt.Data(), date)<<endl;
-  cout<<"Map file :"<<acpt_file->GetName()<<endl;
+void PrepareXiPScatCheck(TString best_file = ""){
+  if(file_dir == "" or fmap_name == "" or figdir_base == "") G4XiPScatAcceptanceCheck();
+  if(!figdir_base.EndsWith("/")) figdir_base += "/";
   InitializeTriggerCondtions();
-  g4genfitcarbon* Xi = new g4genfitcarbon(tree);
-  tree->Add(file_dir+filename);
-  SetBranches(tree);
-  InitializeCorrectionHistograms( tgt );
+  if(best_file != "") LoadBestCorrections(best_file);
+  ResetXiPScatHistograms();
+  over_cnt = 0;
+  InitializeCorrectionHistograms(tgt);
+  TFile* acpt_file = TFile::Open(fmap_dir+fmap_name);
+  cout<<"Xi-p efficiency map file: "<<fmap_dir+fmap_name<<endl;
+  if(acpt_file == nullptr or acpt_file->IsZombie()) throw runtime_error("Cannot open Xi-p efficiency maps.");
+  TNamed* format = dynamic_cast<TNamed*>(acpt_file->Get("XiPScatMapFormat"));
+  if(format == nullptr or TString(format->GetTitle()) != "XiPScat_StandardXi_20261006")
+    throw runtime_error("Regenerate Xi-p maps using the revised macros.");
   LoadEfficiencies(acpt_file, tgt);
-  auto ent = tree->GetEntries();
-  cout<<"Entries : "<<ent<<endl;
-  int start = 0,last = ent;
-  if(ndiv != 1){
-    int part = (ent / ndiv);
-    start = part * (frac - 1);
-    last = part * frac;
-    if(frac == ndiv) last = ent;
-  }
-  for(auto i = start;i<last;i++){
-    if(i%1000==0) cout << i << endl;
-    Xi->GetEntry(i);
-    if(i == start) cout<<"Start filling histograms..."<<endl;
+  acpt_file->Close(); delete acpt_file;
+}
+TString XiPScatCheckInputFile(int i){
+  TString name = Form("XiPScatReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root",i);
+  return file_dir+(file_dir.EndsWith("/") ? "" : "/")+name;
+}
+void WriteXiPScatCheckWorker(TString name){
+  TFile* out_file = TFile::Open(name, "RECREATE");
+  if(out_file == nullptr or out_file->IsZombie()) throw runtime_error("Cannot create correction worker file.");
+  TNamed parameters("CorrectionParameters", CorrectionParameters().Data());
+  out_file->WriteTObject(&parameters);
+  for(auto hist:hMap) out_file->WriteTObject(hist.second);
+  out_file->Write(); out_file->Close(); delete out_file;
+}
+void G4XiPScatAcceptanceCheck(int i, int frac = 1, int ndiv = 1, TString best_file = ""){
+  if(ndiv < 1 or frac < 1 or frac > ndiv) throw runtime_error("Invalid worker fraction.");
+  PrepareXiPScatCheck(best_file);
+  filename = XiPScatCheckInputFile(i);
+  if(!FileCheck(filename)) throw runtime_error(string("Cannot read input: ")+filename.Data());
+  TChain* tree = new TChain("tpc");
+  tree->Add(filename);
+  g4genfitcarbon* Xi = new g4genfitcarbon(tree);
+  SetBranches(tree);
+  Long64_t ent = tree->GetEntries(), part = ent/ndiv;
+  Long64_t start = part*(frac-1), last = frac == ndiv ? ent : part*frac;
+  for(Long64_t entry=start;entry<last;++entry){
+    if(entry%1000 == 0) cout<<entry<<endl;
+    Xi->GetEntry(entry);
     FillHistograms(Xi, tgt);
   }
-  gSystem->mkdir(figdir_base, true);
   gSystem->mkdir(bufdir, true);
-  TFile* out_file = TFile::Open(Form("%sCorrectedHistograms_%d_%d_%d.root", bufdir.Data(), i, frac, ndiv), "RECREATE");
-  out_file->cd("");
-  for(auto& [key, hist]: hMap){
-    hist->Write();
-  }
-  out_file->Write();
-  out_file->Close();
-
+  WriteXiPScatCheckWorker(Form("%sCorrectedHistograms_%d_%d_%d.root",bufdir.Data(),i,frac,ndiv));
 }
-void CheckAcceptance(vector<TFile*> files){
+void CheckAcceptance(vector<TFile*> files, bool make_figures){
   if(figdir_base == "") G4XiPScatAcceptanceCheck();
   SetStyle();
   gStyle->SetTitleSize(tsize,"XY");
@@ -140,12 +124,20 @@ void CheckAcceptance(vector<TFile*> files){
   gStyle->SetPadTopMargin(top_margin);
   gStyle->SetPadBottomMargin(bottom_margin);
   gROOT->ForceStyle();
+  if(files.empty()) throw runtime_error("No correction workers supplied.");
+  InitializeTriggerCondtions();
+  ResetXiPScatHistograms();
   for(auto file: files){
     LoadCorrectionHistograms(file, tgt);
   }
   MakeChi2Map(tgt);
-  NormalizeHistograms(tgt);
   TFile* out_file = TFile::Open(figdir_base + "CorrectionResults.root", "RECREATE");
+  if(out_file == nullptr or out_file->IsZombie()) throw runtime_error("Cannot create CorrectionResults.root.");
+  TNamed parameters("CorrectionParameters", CorrectionParameters().Data());
+  out_file->WriteTObject(&parameters);
+  for(auto hist:hMap) out_file->WriteTObject(hist.second); // Original merged counts.
+  if(!make_figures){ out_file->Write(); out_file->Close(); delete out_file; return; }
+  NormalizeHistograms(tgt);
   for(auto p:particle){
     //Each step by gen
     TString figdir = figdir_base  + "/StepByGen/";
@@ -201,12 +193,12 @@ void CheckAcceptance(vector<TFile*> files){
         TString key = AcceptanceHistTitle1D(tgt, parti, v1, DenConf);
         TH1* h_gen = (TH1*)hMap[key]->Clone();
         cout<<"Drawing "<<key<<endl;
-        h_gen->GetYaxis()->SetRangeUser(0,1.5);
+        h_gen->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_gen->GetMaximum()));
         h_gen->Draw("hist");
         cout<<"GenMaxi = "<<h_gen->GetMaximum()<<endl;
         h_gen->SetLineColor(kBlack);
-        TLegend* leg = new TLegend(0.15,0.75,0.9,0.95);
-        leg->SetTextSize(0.04);
+        TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+        leg->SetTextSize(0.03);
         leg->SetFillStyle(0);
         leg->SetBorderSize(0);
         leg->AddEntry(h_gen, DenConf + trig, "l");
@@ -237,37 +229,41 @@ void CheckAcceptance(vector<TFile*> files){
       c_corr->cd(iv+1);
       TString key = AcceptanceHistTitle1D(tgt, p, v1, "Gen" + trig);
       TH1* h_gen = (TH1*)hMap[key]->Clone();
-      h_gen->GetYaxis()->SetRangeUser(0, h_gen->GetMaximum()*1.5);
+      SetFinalXiPPlotRange(h_gen, AcceptanceHistTitle1D(tgt, p, v1, ""));
       h_gen->Draw("hist");
-      TLegend* leg = new TLegend(0.15,0.75,0.9,0.95);
-      leg->SetTextSize(0.04);
+      TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+      leg->SetTextSize(0.03);
       leg->SetFillStyle(0);
       leg->SetBorderSize(0);
       leg->AddEntry(h_gen, Labels["Gen" + trig], "l");
 #if DrawGeneValue
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcpt"+trig);
+      key = AcceptanceHistTitle1D(tgt, p, v1, "XiPflag"+trig);
       auto h_xiacpt = (TH1*)hMap[key]->Clone();
       h_xiacpt ->Draw("hist same");
-      leg->AddEntry(h_xiacpt, Labels["XiAcpt"+trig]+ "wo_resol", "l");
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcptCor"+trig);
+      leg->AddEntry(h_xiacpt, Labels["XiPflag"+trig]+ "wo_resol", "l");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "XiPflagCor"+trig);
       auto h_xiacptcor = (TH1*)hMap[key]->Clone();
       h_xiacptcor->Draw("pe same"); 
-      leg->AddEntry(h_xiacptcor, "Acceptance-corrected" + "wo_resol" , "pe");
+      leg->AddEntry(h_xiacptcor, TString("Acceptance-corrected") + " (MC kinematics)" , "pe");
 #endif
 #if DrawResSmeared
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiRecAcpt"+trig);
+      key = AcceptanceHistTitle1D(tgt, p, v1, "XiPflagRec"+trig);
       auto h_xirecacpt = (TH1*)hMap[key]->Clone();
       h_xirecacpt ->Draw("hist same");
-      leg->AddEntry(h_xirecacpt, Labels["XiAcpt"+trig], "l");
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiRecAcptCor"+trig);
+      leg->AddEntry(h_xirecacpt, Labels["XiPflag"+trig], "l");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "XiPflagRecCor"+trig);
       auto h_xirecacptcor = (TH1*)hMap[key]->Clone();
       h_xirecacptcor->Draw("pe same");
       leg->AddEntry(h_xirecacptcor, "Acceptance-corrected", "pe");
   #endif 
-      //key = AcceptanceHistTitle1D(tgt, p, v1, "GoodXiCor"+trig);
-      //auto h_goodxicor = (TH1*)hMap[key]->Clone();
-      //h_goodxicor->Draw("pe same");
-      //leg->AddEntry(h_goodxicor, Labels["GoodXiCor"], "pe");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "GoodXiAndScatPGood"+trig);
+      auto h_goodxi = (TH1*)hMap[key]->Clone();
+      h_goodxi->Draw("hist same");
+      leg->AddEntry(h_goodxi, Labels["GoodXiAndScatPGood"], "l");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "GoodXiAndScatPGoodCor"+trig);
+      auto h_goodxicor = (TH1*)hMap[key]->Clone();
+      h_goodxicor->Draw("pe same");
+      leg->AddEntry(h_goodxicor, Labels["GoodXiAndScatPGoodCor"], "pe");
       if(iv == 0) leg->Draw();
     }
     c_corr->SaveAs(figdir_rec + ct + ".pdf");
@@ -284,45 +280,53 @@ void CheckAcceptance(vector<TFile*> files){
       c_corr_rat->cd(iv+1);
       TString key = AcceptanceHistTitle1D(tgt, p, v1, "Gen" + trig);
       TH1* h_gen = (TH1*)hMap[key]->Clone();
-      h_gen->GetYaxis()->SetRangeUser(0, h_gen->GetMaximum()*1.5);
+      SetFinalXiPPlotRange(h_gen, AcceptanceHistTitle1D(tgt, p, v1, ""));
       h_gen->Draw("hist");
-      TLegend* leg = new TLegend(0.15,0.75,0.9,0.95);
-      leg->SetTextSize(0.04);
+      TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+      leg->SetTextSize(0.03);
       leg->SetFillStyle(0);
       leg->SetBorderSize(0);
       leg->AddEntry(h_gen, Labels["Gen" + trig], "l");
 #if DrawGeneValue
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcpt"+trig);
+      key = AcceptanceHistTitle1D(tgt, p, v1, "XiPflag"+trig);
       auto h_xiacpt = (TH1*)hMap[key]->Clone();
       h_xiacpt ->Draw("hist same");
-      leg->AddEntry(h_xiacpt, "XiAcpt"+trig, "l");
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiAcptCor"+trig);
+      leg->AddEntry(h_xiacpt, "XiPflag"+trig, "l");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "XiPflagCor"+trig);
       auto h_xiacptcor = (TH1*)hMap[key]->Clone();
       h_xiacptcor->Draw("pe same"); 
-      leg->AddEntry(h_xiacptcor, "XiAcptCor"+trig, "pe");
+      leg->AddEntry(h_xiacptcor, "XiPflagCor"+trig, "pe");
       auto gr = MakeDivisionGraph(h_xiacptcor, h_gen);
       gr->SetMarkerColor(kAzure);
       gr->Draw("PE same");
       leg->AddEntry(gr, "Ratio", "pe");
 #endif
 #if DrawResSmeared
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiRecAcpt"+trig);
+      key = AcceptanceHistTitle1D(tgt, p, v1, "XiPflagRec"+trig);
       auto h_xirecacpt = (TH1*)hMap[key]->Clone();
       h_xirecacpt ->Draw("hist same");
-      leg->AddEntry(h_xirecacpt, "XiRecAcpt"+trig, "l");
-      key = AcceptanceHistTitle1D(tgt, p, v1, "XiRecAcptCor"+trig);
+      leg->AddEntry(h_xirecacpt, "XiPflagRec"+trig, "l");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "XiPflagRecCor"+trig);
       auto h_xirecacptcor = (TH1*)hMap[key]->Clone();
       h_xirecacptcor->Draw("pe same"); 
-      leg->AddEntry(h_xirecacptcor, "XiRecAcptCor"+trig, "pe");
+      leg->AddEntry(h_xirecacptcor, "XiPflagRecCor"+trig, "pe");
       auto grrec = MakeDivisionGraph(h_xirecacptcor, h_gen);
       grrec->SetMarkerColor(kMagenta);
       grrec->Draw("PE same");
       leg->AddEntry(grrec, "Rec Ratio", "pe");
 #endif
-      //key = AcceptanceHistTitle1D(tgt, p, v1, "GoodXiCor"+trig);
-      //auto h_goodxicor = (TH1*)hMap[key]->Clone();
-      //h_goodxicor->Draw("pe same");
-      //leg->AddEntry(h_goodxicor, "GoodXiCor", "pe");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "GoodXiAndScatPGood"+trig);
+      auto h_goodxi = (TH1*)hMap[key]->Clone();
+      h_goodxi->Draw("hist same");
+      leg->AddEntry(h_goodxi, Labels["GoodXiAndScatPGood"], "l");
+      key = AcceptanceHistTitle1D(tgt, p, v1, "GoodXiAndScatPGoodCor"+trig);
+      auto h_goodxicor = (TH1*)hMap[key]->Clone();
+      h_goodxicor->Draw("pe same");
+      leg->AddEntry(h_goodxicor, Labels["GoodXiAndScatPGoodCor"], "pe");
+      auto grgood = MakeDivisionGraph(h_goodxicor, h_gen);
+      grgood->SetMarkerColor(kGreen+2);
+      grgood->Draw("PE same");
+      leg->AddEntry(grgood, "MC-matched closure ratio", "pe");
       if(iv == 0) leg->Draw();
     }
     c_corr_rat->SaveAs(figdir_rec + ct + ".pdf");
@@ -354,7 +358,7 @@ void CheckAcceptance(vector<TFile*> files){
         TString key_num = AcceptanceHistTitle1D(tgt, p, v, num);
         TString key_cor = CorrectionHists(tgt, p, v, num, pc, num, den, v1, v2);
         TH1* h_den = (TH1*)hMap[key]->Clone();
-        h_den->GetYaxis()->SetRangeUser(0, 1.5);
+        h_den->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_den->GetMaximum()));
         h_den->SetLineColor(kBlack);
         h_den->Draw("hist");
         TH1* h_num = (TH1*)hMap[key_num]->Clone();
@@ -365,8 +369,8 @@ void CheckAcceptance(vector<TFile*> files){
         h_cor->Draw("hist same");
         auto gr = MakeDivisionGraph(h_cor, h_den);
         gr->Draw("PE same");
-        TLegend* leg = new TLegend(0.15,0.75,0.9,0.95);
-        leg->SetTextSize(0.04);
+        TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+        leg->SetTextSize(0.03);
         leg->SetFillStyle(0);
         leg->SetBorderSize(0);
         leg->AddEntry(h_den, Labels[den], "l");
@@ -414,7 +418,7 @@ void CheckAcceptance(vector<TFile*> files){
           TString key_num = AcceptanceHistTitle1D(tgt, p, v, num);
           TString key_cor = CorrectionHists(tgt, p, v, num, pc, num, den, v1, v2);
           TH1* h_den = (TH1*)hMap[key]->Clone();
-          h_den->GetYaxis()->SetRangeUser(0, 1.5);
+          h_den->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_den->GetMaximum()));
           h_den->SetLineColor(kBlack);
           h_den->Draw("hist");
           TH1* h_num = (TH1*)hMap[key_num]->Clone();
@@ -425,8 +429,8 @@ void CheckAcceptance(vector<TFile*> files){
           h_cor->Draw("hist same");
           auto gr = MakeDivisionGraph(h_cor, h_den);
           gr->Draw("PE same");
-          TLegend* leg = new TLegend(0.15,0.75,0.9,0.95);
-          leg->SetTextSize(0.04);
+          TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+          leg->SetTextSize(0.03);
           leg->SetFillStyle(0);
           leg->SetBorderSize(0);
           leg->AddEntry(h_den, Labels[den], "l");
@@ -441,11 +445,11 @@ void CheckAcceptance(vector<TFile*> files){
       }
     }
   }//part
-  figdir_base+= "/EventVars/";
+  TString event_figdir = figdir_base+"EventVars/";
   for(auto ev: EventVars){
     cout<<"EventVar: "<<ev<<endl;
     //Each step by gen
-    TString figdir = figdir_base  + "StepByGen/";
+    TString figdir = event_figdir  + "StepByGen/";
     gSystem->mkdir(figdir, true);
     TString ct = Form("Canv_%s", ev.Data());
     TCanvas* c0 = new TCanvas(ct, ct, canv_size_x, canv_size_y);
@@ -454,8 +458,8 @@ void CheckAcceptance(vector<TFile*> files){
       TH1* h_gen = (TH1*)hMap[key]->Clone();
       h_gen->GetYaxis()->SetRangeUser(0,h_gen->GetMaximum()*1.5);
       h_gen->Draw("hist");
-      TLegend* leg = new TLegend(0.15,0.75,0.9,0.95);
-      leg->SetTextSize(0.04);
+      TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+      leg->SetTextSize(0.03);
       leg->SetFillStyle(0);
       leg->SetBorderSize(0);
       leg->AddEntry(h_gen, "Gen" + trig, "l");
@@ -472,7 +476,7 @@ void CheckAcceptance(vector<TFile*> files){
     c0->SaveAs(figdir + ct + ".pdf");
 
     //Step by step correction
-    figdir = figdir_base  + "StepByStep/";
+    figdir = event_figdir  + "StepByStep/";
     gSystem->mkdir(figdir, true);
     ct = Form("CanvStepByStep_%s", ev.Data());
     TCanvas* c_sbs = new TCanvas(ct, ct, canv_size_x, canv_size_y);
@@ -481,8 +485,8 @@ void CheckAcceptance(vector<TFile*> files){
       TH1* h_gen = (TH1*)hMap[key]->Clone();
       h_gen->GetYaxis()->SetRangeUser(0,h_gen->GetMaximum()*1.5);
       h_gen->Draw("hist");
-      TLegend* leg = new TLegend(0.15,0.75,0.9,0.95);
-      leg->SetTextSize(0.04);
+      TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+      leg->SetTextSize(0.03);
       leg->SetFillStyle(0);
       leg->SetBorderSize(0);
       leg->AddEntry(h_gen, "Gen" + trig, "l");
@@ -499,247 +503,281 @@ void CheckAcceptance(vector<TFile*> files){
     c_sbs->SaveAs(figdir + ct + ".pdf");
 
     //Recon with final correction
-    TString figdir_rec = figdir_base + "Recon/";
+    TString figdir_rec = event_figdir + "Recon/";
     gSystem->mkdir(figdir_rec, true);
     ct = Form("Canv_%s_FinalCorr", ev.Data());
     TCanvas* c_corr = new TCanvas(ct, ct, canv_size_x, canv_size_y);
     {
       TString key = EventTitle(tgt, ev, "Gen" + trig);
       TH1* h_gen = (TH1*)hMap[key]->Clone();
-      h_gen->GetYaxis()->SetRangeUser(0, h_gen->GetMaximum()*1.5);
+      SetFinalXiPPlotRange(h_gen, EventTitle(tgt, ev, ""));
       h_gen->Draw("hist");
-      TLegend* leg = new TLegend(0.15,0.75,0.9,0.95);
-      leg->SetTextSize(0.04);
+      TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+      leg->SetTextSize(0.03);
       leg->SetFillStyle(0);
       leg->SetBorderSize(0);
       leg->AddEntry(h_gen, "Gen" + trig, "l");
-      key = EventTitle(tgt, ev, "XiAcpt"+trig);
+#if DrawGeneValue
+      key = EventTitle(tgt, ev, "XiPflag"+trig);
       auto h_xiacpt = (TH1*)hMap[key]->Clone();
       h_xiacpt ->Draw("hist same");
-      key = EventTitle(tgt, ev, "XiRecAcpt"+trig);
-      auto h_xirecacpt = (TH1*)hMap[key]->Clone();
-      h_xirecacpt ->Draw("hist same");
-      key = EventTitle(tgt, ev, "GoodXiCor"+trig);
-      auto h_goodxicor = (TH1*)hMap[key]->Clone();
-      //h_goodxicor->Draw("pe same");
-      key = EventTitle(tgt, ev, "XiAcptCor"+trig);
+      leg->AddEntry(h_xiacpt, "XiPflag"+trig, "l");
+      key = EventTitle(tgt, ev, "XiPflagCor"+trig);
       auto h_xiacptcor = (TH1*)hMap[key]->Clone();
       h_xiacptcor->Draw("pe same");
-      key = EventTitle(tgt, ev, "XiRecAcptCor"+trig);
+      leg->AddEntry(h_xiacptcor, "XiPflagCor"+trig, "pe");
+#endif
+#if DrawResSmeared
+      key = EventTitle(tgt, ev, "XiPflagRec"+trig);
+      auto h_xirecacpt = (TH1*)hMap[key]->Clone();
+      h_xirecacpt ->Draw("hist same");
+      leg->AddEntry(h_xirecacpt, "XiPflagRec"+trig, "l");
+      key = EventTitle(tgt, ev, "XiPflagRecCor"+trig);
       auto h_xirecacptcor = (TH1*)hMap[key]->Clone();
       h_xirecacptcor->Draw("pe same");
-      leg->AddEntry(h_xiacpt, "XiAcpt"+trig, "l");
-      leg->AddEntry(h_xirecacpt, "XiRecAcpt"+trig, "l");
-      //leg->AddEntry(h_goodxicor, "GoodXiCor", "pe");
-      leg->AddEntry(h_xiacptcor, "XiAcptCor"+trig, "pe");
-      leg->AddEntry(h_xirecacptcor, "XiRecAcptCor"+trig, "pe");
+      leg->AddEntry(h_xirecacptcor, "XiPflagRecCor"+trig, "pe");
+#endif
+      key = EventTitle(tgt, ev, "GoodXiAndScatPGood"+trig);
+      auto h_goodxi = (TH1*)hMap[key]->Clone();
+      h_goodxi->Draw("hist same");
+      leg->AddEntry(h_goodxi, Labels["GoodXiAndScatPGood"], "l");
+      key = EventTitle(tgt, ev, "GoodXiAndScatPGoodCor"+trig);
+      auto h_goodxicor = (TH1*)hMap[key]->Clone();
+      h_goodxicor->Draw("pe same");
+      leg->AddEntry(h_goodxicor, Labels["GoodXiAndScatPGoodCor"], "pe");
+      auto grgood = MakeDivisionGraph(h_goodxicor, h_gen);
+      grgood->SetMarkerColor(kGreen+2);
+      grgood->Draw("PE same");
+      leg->AddEntry(grgood, "MC-matched closure ratio", "pe");
       leg->Draw();
     }
     c_corr->SaveAs(figdir_rec + ct + ".pdf");
 
     //Recon with final correction and ratio
-    figdir_rec = figdir_base + "Recon_w_rat/";
+    figdir_rec = event_figdir + "Recon_w_rat/";
     gSystem->mkdir(figdir_rec, true);
     ct = Form("Canv_%s_FinalCorr_w_rat", ev.Data());
     TCanvas* c_corr_rat = new TCanvas(ct, ct, canv_size_x, canv_size_y);
     {
       TString key = EventTitle(tgt, ev, "Gen" + trig);
       TH1* h_gen = (TH1*)hMap[key]->Clone();
-      h_gen->GetYaxis()->SetRangeUser(0, h_gen->GetMaximum()*1.5);
+      SetFinalXiPPlotRange(h_gen, EventTitle(tgt, ev, ""));
       h_gen->Draw("hist");
-      TLegend* leg = new TLegend(0.15,0.75,0.9,0.95);
-      leg->SetTextSize(0.04);
+      TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+      leg->SetTextSize(0.03);
       leg->SetFillStyle(0);
       leg->SetBorderSize(0);
-      key = EventTitle(tgt, ev, "XiAcpt"+trig);
+      leg->AddEntry(h_gen, "Gen" + trig, "l");
+#if DrawGeneValue
+      key = EventTitle(tgt, ev, "XiPflag"+trig);
       auto h_xiacpt = (TH1*)hMap[key]->Clone();
       h_xiacpt ->Draw("hist same");
-      key = EventTitle(tgt, ev, "XiRecAcpt"+trig);
-      auto h_xirecacpt = (TH1*)hMap[key]->Clone();
-      h_xirecacpt ->Draw("hist same");
-      key = EventTitle(tgt, ev, "GoodXiCor"+trig);
-      auto h_goodxicor = (TH1*)hMap[key]->Clone();
-      //h_goodxicor->Draw("pe same");
-      key = EventTitle(tgt, ev, "XiAcptCor"+trig);
+      leg->AddEntry(h_xiacpt, "XiPflag"+trig, "l");
+      key = EventTitle(tgt, ev, "XiPflagCor"+trig);
       auto h_xiacptcor = (TH1*)hMap[key]->Clone();
       h_xiacptcor->Draw("pe same");
-      key = EventTitle(tgt, ev, "XiRecAcptCor"+trig);
-      auto h_xirecacptcor = (TH1*)hMap[key]->Clone();
-      h_xirecacptcor->Draw("pe same");
+      leg->AddEntry(h_xiacptcor, "XiPflagCor"+trig, "pe");
       auto gr = MakeDivisionGraph(h_xiacptcor, h_gen);
       gr->SetMarkerColor(kAzure);
       gr->Draw("PE same");
+      leg->AddEntry(gr, "Ratio", "pe");
+#endif
+#if DrawResSmeared
+      key = EventTitle(tgt, ev, "XiPflagRec"+trig);
+      auto h_xirecacpt = (TH1*)hMap[key]->Clone();
+      h_xirecacpt ->Draw("hist same");
+      leg->AddEntry(h_xirecacpt, "XiPflagRec"+trig, "l");
+      key = EventTitle(tgt, ev, "XiPflagRecCor"+trig);
+      auto h_xirecacptcor = (TH1*)hMap[key]->Clone();
+      h_xirecacptcor->Draw("pe same");
+      leg->AddEntry(h_xirecacptcor, "XiPflagRecCor"+trig, "pe");
       auto grrec = MakeDivisionGraph(h_xirecacptcor, h_gen);
       grrec->SetMarkerColor(kMagenta);
       grrec->Draw("PE same");
-      leg->AddEntry(h_gen, "Gen" + trig, "l");
-      leg->AddEntry(h_xiacpt, "XiAcpt"+trig, "l");
-      leg->AddEntry(h_xirecacpt, "XiRecAcpt"+trig, "l");
-      //leg->AddEntry(h_goodxicor, "GoodXiCor", "pe");
-      leg->AddEntry(h_xiacptcor, "XiAcptCor"+trig, "pe");
-      leg->AddEntry(h_xirecacptcor, "XiRecAcptCor"+trig, "pe");
-      leg->AddEntry(gr, "Ratio", "pe");
       leg->AddEntry(grrec, "Rec Ratio", "pe");
+#endif
+      key = EventTitle(tgt, ev, "GoodXiAndScatPGood"+trig);
+      auto h_goodxi = (TH1*)hMap[key]->Clone();
+      h_goodxi->Draw("hist same");
+      leg->AddEntry(h_goodxi, Labels["GoodXiAndScatPGood"], "l");
+      key = EventTitle(tgt, ev, "GoodXiAndScatPGoodCor"+trig);
+      auto h_goodxicor = (TH1*)hMap[key]->Clone();
+      h_goodxicor->Draw("pe same");
+      leg->AddEntry(h_goodxicor, Labels["GoodXiAndScatPGoodCor"], "pe");
+      auto grgood = MakeDivisionGraph(h_goodxicor, h_gen);
+      grgood->SetMarkerColor(kGreen+2);
+      grgood->Draw("PE same");
+      leg->AddEntry(grgood, "MC-matched closure ratio", "pe");
       leg->Draw();
+#if DrawGeneValue || DrawResSmeared
       if(ev.Contains("Pol")){
-        double mean_rat_gen =0,std_rat_gen=0, mean_rat_cor=0, std_rat_cor=0;
-        int np = gr->GetN();
-        for(int ip = 0; ip < np; ++ip){
+        TLatex* tex = new TLatex();
+        tex->SetNDC();
+        tex->SetTextSize(0.04);
+#if DrawGeneValue
+        double mean_rat_gen = 0, std_rat_gen = 0;
+        int np_gen = gr->GetN();
+        for(int ip = 0; ip < np_gen; ++ip){
           double x, y;
           gr->GetPoint(ip, x, y);
           mean_rat_gen += y;
           std_rat_gen += y*y;
+        }
+        if(np_gen == 0){
+          cout<<"No points in truth ratio for "<<ev<<endl;
+          np_gen = 1;
+        }
+        mean_rat_gen /= np_gen;
+        std_rat_gen = sqrt(max(0., std_rat_gen/np_gen - mean_rat_gen*mean_rat_gen));
+        tex->SetTextColor(kAzure);
+        tex->DrawLatex(0.2, 0.3, Form("Gen Ratio: %.3f #pm %.5f", mean_rat_gen, std_rat_gen));
+#endif
+#if DrawResSmeared
+        double mean_rat_cor = 0, std_rat_cor = 0;
+        int np_rec = grrec->GetN();
+        for(int ip = 0; ip < np_rec; ++ip){
+          double x, y;
           grrec->GetPoint(ip, x, y);
           mean_rat_cor += y;
           std_rat_cor += y*y;
         }
-        if(np == 0){
-          cout<<"No points in graph for "<<ev<<endl;
-          np = 1;
-          //Null results will still be recored.
+        if(np_rec == 0){
+          cout<<"No points in reconstructed ratio for "<<ev<<endl;
+          np_rec = 1;
         }
-        mean_rat_gen /= np;
-        std_rat_gen = sqrt(std_rat_gen/np - mean_rat_gen*mean_rat_gen);
-        mean_rat_cor /= np;
-        std_rat_cor = sqrt(std_rat_cor/np - mean_rat_cor*mean_rat_cor);
-        TLatex* tex = new TLatex();
-        tex->SetNDC();
-        tex->SetTextSize(0.04);
-        tex->SetTextColor(kAzure);
-        tex->DrawLatex(0.2, 0.3, Form("Gen Ratio: %.3f #pm %.5f", mean_rat_gen, std_rat_gen));
+        mean_rat_cor /= np_rec;
+        std_rat_cor = sqrt(max(0., std_rat_cor/np_rec - mean_rat_cor*mean_rat_cor));
         tex->SetTextColor(kMagenta);
         tex->DrawLatex(0.2, 0.2, Form("Rec Ratio: %.3f #pm %.5f", mean_rat_cor, std_rat_cor));
+#endif
       }
+#endif
       // ROOT declares cd() with a null default path; pass an explicit empty
       // path to select this file while avoiding -Wnonnull from that default.
       out_file->cd("");
+#if DrawGeneValue
       gr->Write(Form("Graph_%s_Corr_w_rat", ev.Data()));
+#endif
+#if DrawResSmeared
       grrec->Write(Form("Graph_%s_RecCorr_w_rat", ev.Data()));
+#endif
       
     }
     c_corr_rat->SaveAs(figdir_rec + ct + ".pdf");
   }//EventVar
-  out_file->cd("");
+
+  TString weight_figdir = figdir_base+"Weights/";
+  gSystem->mkdir(weight_figdir, true);
+  vector<TString> weight_config = {"total"};
+  vector<TString> whist_config = {"h_weight", "h_weightRec", "hgood_weight", "hgood_weightRec","hbad_weight", "hbad_weightRec"};
+  vector<TString> wRathist_config = {"h_weightRatio",  "hgood_weightRatio","hbad_weightRatio"};
+  vector<TString> wDiffhist_config = {"h_weightDiff", "hgood_weightDiff","hbad_weightDiff"};
+  for(auto cp:CorrPars){
+    weight_config.push_back(cp.p_cor);
+  }
+  for(auto wconf: weight_config){
+    TString wconf_dir = weight_figdir + "/Weights/";
+    gSystem->mkdir(wconf_dir, true);
+    vector<int> whist_colors ={
+      kBlack, kRed, kBlue, kGreen+2, kMagenta, kOrange+7
+    };
+    TString ct = Form("Canv_Weights_%s", wconf.Data());
+    TCanvas* c_w = new TCanvas(ct, ct, canv_size_x, canv_size_y);
+    TString tag = wconf == "total" ? "" : "_"+wconf;
+    TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+    leg->SetTextSize(0.03);
+    leg->SetFillStyle(0);
+    leg->SetBorderSize(0);
+    TLegend* leg_rat = new TLegend(0.15,0.58,0.95,0.94);
+    leg_rat->SetTextSize(0.03);
+    leg_rat->SetFillStyle(0);
+    leg_rat->SetBorderSize(0);
+    for(int iw = 0; iw < whist_config.size(); ++iw){
+      TString whist = whist_config[iw];
+      TString key = whist + tag;
+      TH1* h_w = (TH1*)hMap[key]->Clone();
+      h_w->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_w->GetMaximum()));
+      h_w->Draw("hist same");
+      h_w->SetLineColor(whist_colors[iw]);
+      leg->AddEntry(h_w, whist, "l");
+    }
+    leg->Draw();
+    c_w->SaveAs(wconf_dir + ct + ".pdf");
+    wconf_dir = weight_figdir + "/WeightRatio/";
+    gSystem->mkdir(wconf_dir, true);
+    ct = Form("Canv_WeightRatio_%s", wconf.Data());
+    TCanvas* c_wr = new TCanvas(ct, ct, canv_size_x, canv_size_y);
+    for(int iw = 0; iw < wRathist_config.size(); ++iw){
+      TString whist = wRathist_config[iw];
+      TString key = whist + tag;
+      TH1* h_w = (TH1*)hMap[key]->Clone();
+      leg_rat->AddEntry(h_w, whist, "l");
+      h_w->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_w->GetMaximum()));
+      h_w->Draw("hist same");
+      h_w->SetLineColor(whist_colors[iw]);
+    }
+    leg_rat->Draw();
+    c_wr->SaveAs(wconf_dir + ct + ".pdf");
+
+    wconf_dir = weight_figdir + "/WeightDiff/";
+    gSystem->mkdir(wconf_dir, true);
+    ct = Form("Canv_WeightDiff_%s", wconf.Data());
+    TCanvas* c_wd = new TCanvas(ct, ct, canv_size_x, canv_size_y);
+    for(int iw = 0; iw < wDiffhist_config.size(); ++iw){
+      TString whist = wDiffhist_config[iw];
+      TString key = whist + tag;
+      TH1* h_w = (TH1*)hMap[key]->Clone();
+      h_w->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_w->GetMaximum()));
+      h_w->Draw("hist same");
+      h_w->SetLineColor(whist_colors[iw]);
+    }
+    leg_rat->Draw();
+    c_wd->SaveAs(wconf_dir + ct + ".pdf");
+  }
+
+
+  TDirectory* display = out_file->mkdir("NormalizedPlots");
   for(auto& [key, hist]: hMap){
-    hist->Write(); 
+    display->WriteTObject(hist); 
   }
   out_file->Write();
   out_file->Close();
+  delete out_file;
 }
-void CheckAcceptanceAll(){
-  if(figdir_base == "") G4XiPScatAcceptanceCheck();
-  int nfile = 30;
-  int ndiv = 5;
-  int runs = ndiv;
-  if(test_run){
-    nfile = 1;
-    runs = 1;
-  }
+void CheckAcceptanceAll(int nfile = 10, int ndiv = 10, TString best_file = "", bool make_figures = true){
+  if(figdir_base == "" or bufdir == "") G4XiPScatAcceptanceCheck();
+  InitializeTriggerCondtions();
+  if(best_file != "") LoadBestCorrections(best_file);
+  if(test_run) nfile = 1;
   vector<TFile*> files;
   for(int i=0;i<nfile;++i){
-    for(int frac = 1; frac <= runs; ++frac){
-      TFile* file = TFile::Open(Form("%sCorrectedHistograms_%d_%d_%d.root", bufdir.Data(), i, frac, ndiv));
+    for(int frac=1;frac<=ndiv;++frac){
+      TString name = Form("%sCorrectedHistograms_%d_%d_%d.root",bufdir.Data(),i,frac,ndiv);
+      TFile* file = TFile::Open(name);
+      if(file == nullptr or file->IsZombie()) throw runtime_error(string("Cannot read worker: ")+name.Data());
       files.push_back(file);
     }
   }
-  CheckAcceptance(files);
+  CheckAcceptance(files, make_figures);
+  for(auto file:files){ file->Close(); delete file; }
 }
-void G4XiPScatAcceptanceCheckAll(){
-  if(figdir_base == "")G4XiPScatAcceptanceCheck();
-  SetStyle();
-  double pxi = 0;
-  int nfile = 30;
-  bool test_run = 0;
-  if(test_run) nfile = 1;
+void G4XiPScatAcceptanceCheckAll(int nfile = 10, TString best_file = "", bool make_figures = true){
+  PrepareXiPScatCheck(best_file);
   TChain* tree = new TChain("tpc");
-  cout<<"Loading files..."<<endl;
-  bool file_check = 1;
   for(int i=0;i<nfile;++i){
-#if CH2
-    filename = Form("XiReconCH2_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
-	#if PosShift
-		filename = Form("XiReconCH2_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
-	#endif
-#else
-    filename = Form("XiReconProd_P_E42_%d_GenfitCarbonGeant4Ver5.root",i);
-	#if PosShift
-		filename = Form("XiReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
-	#endif
-#endif
-    cout<<"Loading "<<filename<<endl;
-    if(FileCheck(file_dir+filename) == 0){
-      file_check = 0;
-      continue;
-    }
-    if(tree -> Add(file_dir+filename) != 1){
-      cout<<"Error adding file "<<filename<<endl;
-      file_check = 0;
-    }
+    TString name = XiPScatCheckInputFile(i);
+    if(!FileCheck(name)) throw runtime_error(string("Cannot read input: ")+name.Data());
+    tree->Add(name);
   }
-  if(file_check == 0){
-    cout<<"Error loading files. Exiting..."<<endl;
-    return;
-  }
-  cout<<"Accpt file"<<endl;
-#if CH2
-  TFile* acpt_file;
-  #if LVtxIsXi
-    acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260729));
-  #else
-    acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
-  #endif
-#else
-  TFile* acpt_file;
-  #if LVtxIsXi
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260726));
-  #else
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0_WB_6mmShifted_%d.root",260726));
-  #endif
-#endif
-  cout<<Form("Run Target: %s, Date: %d", tgt.Data(), date)<<endl;
-  InitializeTriggerCondtions();
   g4genfitcarbon* Xi = new g4genfitcarbon(tree);
   SetBranches(tree);
-  InitializeCorrectionHistograms( tgt );
-  LoadEfficiencies(acpt_file, tgt);
-  auto ent = tree->GetEntries();
-  cout<<"Entries : "<<ent<<endl;
-  if(test_run) ent = ent / 10;
-  for(auto i = 0;i<ent;i++){
-    if(i%1000==0) cout << i << endl;
-    Xi->GetEntry(i);
-    FillHistograms(Xi, tgt);
-  }
-  TString figdir_base = Form("figs_%d/%s/", date,tgt.Data());
-  if(TrigB){
-    figdir_base.ReplaceAll("figs","figs_TrigB");
-  }
-#if PerXiDist
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerXiDist").Data());
-#endif
-#if PerDist
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_PerDist").Data());
-#endif
-#if PosShift
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_6mmShift").Data());
-#endif
-  if(test_run) figdir_base.ReplaceAll(tgt,tgt + "_testrun");
-#if CH2
-#else
-  //figdir_base.ReplaceAll(tgt,tgt+ "ForcedPi2Ph");
-#endif
-#if LVtxIsXi
-  figdir_base.ReplaceAll(tgt.Data(),(tgt +"_LVtxIsXi").Data());
-#endif
-  gSystem->mkdir(figdir_base, true);
-  gSystem->mkdir(figdir_base + "rootfiles/", true);
-  TFile* out_file = TFile::Open(bufdir + "rootfiles/AcceptanceCorrectionMaps.root", "RECREATE");
-  out_file->cd("");
-  for(auto& [key, hist]: hMap){
-    hist->Write();
-  }
-  out_file->Write();
-  vector<TFile*> files;
-  files.push_back(out_file);
-  CheckAcceptance(files);
+  Long64_t ent = tree->GetEntries();
+  if(test_run) ent /= 10;
+  for(Long64_t entry=0;entry<ent;++entry){ Xi->GetEntry(entry); FillHistograms(Xi, tgt); }
+  gSystem->mkdir(bufdir, true);
+  TString output = bufdir+"CorrectedHistograms_All.root";
+  WriteXiPScatCheckWorker(output);
+  TFile* file = TFile::Open(output);
+  CheckAcceptance({file}, make_figures);
+  file->Close(); delete file;
 }

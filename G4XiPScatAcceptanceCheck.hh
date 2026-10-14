@@ -1,6 +1,13 @@
 #include "G4XiPScatAcceptance.hh"
 #include "TGraphErrors.h"
 #include <vector>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <algorithm>
+extern TString figdir_base;
+int ScatPRecIndex = 0; // Selected recoil candidate in XiResidualsMom_*; original convention.
+
 double weight_th = 100;
 int over_cnt = 0;
 TString trig = "";
@@ -69,82 +76,26 @@ TString SetEventVarAxis(TString var, int &nbinx, double &minx, double &maxx){
     }
     else if(var == "MXiPScat"){
         axis = "M_{#XiP} [GeV]";
-        nbinx = 20; minx = 1.3; maxx = 1.6;
+        nbinx = 30; minx = mXi + mp; maxx = 3.2;
     }
     else if(var == "CThXiPScat"){
-        axis = "cos#theta_{#XiP}";
+        axis = "cos#theta_{p}^{helicity} (#Xi p CM)";
         nbinx = 20; minx = -1; maxx = 1;
     }
     else if(var == "Collinearity"){
         axis = "Collinearity";
-        nbinx = 20; minx = 0.9; maxx = 1;
+        nbinx = 50; minx = 0.5; maxx = 1;
     }
     return axis;
 }
-//map<TString, vector<TString>> CorrectionConf {
-    //{"AllTracked", {"GoodXi"}}
-//};
-#if CH2
-    #if date == 260422
-		CorrPars = {
-			{"GoodXi", "GoodL", "Pi2", {"CosTh","Ph"}},
-			{"GoodL", "Gen", "Pi1", {"CosTh","Ph"}}
-		};
-    #elif date >= 260817
-		CorrPars = {
-		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"Mom","CosOpen"}},
-		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
-		{"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
-		{"PPi1Tracked", "PTracked", "Pi1", {"Mom", "CosPsi"}},
-		{"PTracked", "Gen", "P", {"CosTh", "Mom"}}
-		};
-    #else
-		CorrPars = {
-		{"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosOpen"}},
-		{"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
-		{"GoodL", "PPi1Tracked", "L", {"CosTh"}},
-		{"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "CosPsi"}},
-		{"PTracked", "Gen", "P", {"CosTh", "Mom"}}
-		};
-    #endif
-    #if SecondaryCorr
-        #if date < 260806
-            double p0 = 0.989681, p1 = -0.0194191;
-        #elif date >= 260817
-            double p0 = 0.965351, p1 = -0.0226586;
-        #else
-            double p0 = 0.992069, p1 = -0.0135689;
-        #endif
-        TGraph* gr_PhA = new TGraph();
-        gr_PhA->SetPoint(0, -1, p0 - p1);
-        gr_PhA->SetPoint(1, 0, p0 );
-        gr_PhA->SetPoint(2, 1, p0 + p1);
-        SecondaryCorrection["PolCPhA"] = gr_PhA;
-    #endif
-#else// Carbon
-    CorrPars = {
-        {"GoodXiAndScatPGood", "GoodXi", "ScatP", {"CosTh", "Mom"}},
-        {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosOpen"}},
-        {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"CosTh","Ph"}},
-        {"GoodL", "PPi1Tracked", "L", {"CosTh","CosOpen"}},
-        {"PPi1Tracked", "PTracked", "Pi1", {"CosTh", "Ph"}},
-        {"PTracked", "Gen", "P", {"CosTh", "Mom"}}
-    };
-    #if SecondaryCorr
-        #if date < 260806
-            double p0 = 0.989681, p1 = -0.0194191;
-        #elif date >= 260817
-            double p0 = 0.987175, p1 = -0.025111;
-        #else
-            double p0 = 0.992069, p1 = -0.0135689;
-        #endif
-        TGraph* gr_PhA = new TGraph();
-        gr_PhA->SetPoint(0, -1, p0 - p1);
-        gr_PhA->SetPoint(1, 0, p0 );
-        gr_PhA->SetPoint(2, 1, p0 + p1);
-        SecondaryCorrection["PolCPhA"] = gr_PhA;
-    #endif
-#endif
+CorrPars = {
+    {"GoodXiAndScatPGood", "GoodXi", "ScatP", {"CosTh", "Mom"}},
+    {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
+    {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
+    {"GoodL", "PPi1Tracked", "L", {"CosTh", "Mom"}},
+    {"PPi1Tracked", "PTracked", "Pi1", {"Mom", "CosPsi"}},
+    {"PTracked", "Gen", "P", {"CosTh", "Mom"}}
+};
 TString CorrectionHists(TString pre, TString part, TString var, TString suff, TString part_cor, TString num, TString den, TString v1, TString v2 = ""){
     return AcceptanceHistTitle1D(pre, part, var, suff) + Correction(part_cor,num, den, v1, v2);
 }
@@ -160,229 +111,252 @@ map<TString, int> colorMap = {
 };
 void InitializeTriggerCondtions(){
 #if TrigB
-    cout<<"Applying trigger bias correction..."<<endl;
-    for(int ic=0;ic<CheckLists.size();++ic){
-        CheckLists[ic] = CheckLists[ic] + "TrigB";
-    }
-    cout<<"Updated CheckLists: "<<endl;
-    for(auto &c:CorrPars){
-        cout<<"Updating CorrectionConf for "<<c.num<<" over "<<c.den<<endl;
-        c.num = c.num + "TrigB"; 
-        c.den = c.den + "TrigB";
-    }
-    for(auto c:CorrPars){
-        cout<<"Updated CorrectionConf for "<<c.num<<" over "<<c.den<<endl;
-    }
-    cout<<"Updated CorrectionConf: "<<endl;
-    map<TString, int> colorMap_temp;
-    for(auto c: colorMap){
-        TString key = c.first + "TrigB";
-        colorMap_temp[key] = colorMap[c.first];
-    }
-    for(auto c: colorMap_temp){
-        colorMap[c.first] = c.second;
-    }
+    if(trig == "TrigB") return;
     trig = "TrigB";
-    cout<<"Updated colorMap: "<<endl;
+    for(auto &chk:CheckLists) chk += trig;
+    for(auto &cp:CorrPars){ cp.num += trig; cp.den += trig; }
+    vector<pair<TString, int>> colors;
+    for(auto c:colorMap) colors.push_back({c.first+trig, c.second});
+    for(auto c:colors) colorMap[c.first] = c.second;
+    vector<pair<TString, TString>> labels;
+    for(auto label:Labels) labels.push_back({label.first+trig, label.second});
+    for(auto label:labels) Labels[label.first] = label.second;
 #endif
 }
-void InitializeCorrectionHistograms(TString tgt){
-    TH1D* h_weight = new TH1D("h_weight", "h_weight", 1000, 0, 200);
-    hMap["h_weight"] = h_weight;
-
-    for(auto cp:CorrPars){
-        TString num = cp.num;
-        TString den = cp.den;
-        bool num_acpt = 0, den_acpt = 0;
-        cout<<"Checking if "<<num<<" and "<<den<<" are in CheckLists..."<<endl;
-        for(auto chk:CheckLists){
-            if(chk == num) num_acpt = 1;
-            if(chk == den) den_acpt = 1;
+vector<vector<TString>> CorrectionVariables(TString part){
+    vector<vector<TString>> vars;
+    for(int i=0;i<variable.size();++i){
+        TString v1 = variable[i];
+        if(v1 == "DistT") continue; // Already represented by the original vertex slices.
+        if(v1 == "CosOpen" and (part == "P" or part == "Pi1" or part == "Pi2")) continue;
+        vars.push_back({v1, ""});
+        for(int j=i+1;j<variable.size();++j){
+            TString v2 = variable[j];
+            if(v2 == "DistT") continue;
+            if(v2 == "CosOpen" and (part == "P" or part == "Pi1" or part == "Pi2")) continue;
+            vars.push_back({v1, v2});
         }
-        if(!num_acpt) CheckLists.push_back(num);
-        if(!den_acpt) CheckLists.push_back(den);
     }
-    for(auto chk:CheckLists){
-        cout<<"CheckList: "<<chk<<endl;
+    return vars;
+}
+void SetCorrectionCheckLists(){
+    for(auto cp:CorrPars){
+        if(find(CheckLists.begin(), CheckLists.end(), cp.num) == CheckLists.end()) CheckLists.push_back(cp.num);
+        if(find(CheckLists.begin(), CheckLists.end(), cp.den) == CheckLists.end()) CheckLists.push_back(cp.den);
+    }
+}
+vector<TString> FinalXiPChecks(){
+    return {"XiPflag", "XiPflagCor", "XiPflagRec", "XiPflagRecCor",
+            "GoodXiAndScatPGoodCor", "GoodXiAndScatPGoodRec", "GoodXiAndScatPGoodRecCor"};
+}
+TString CorrectionParameters(){
+    TString text;
+    for(auto cp:CorrPars){
+        text += cp.num + "\t" + cp.den + "\t" + cp.p_cor + "\t" + cp.var_cor[0] + "\t";
+        text += (cp.var_cor.size() > 1 ? cp.var_cor[1] : "-") + "\n";
+    }
+    return text;
+}
+void LoadBestCorrections(TString filename){
+    ifstream input(filename.Data());
+    if(!input) throw runtime_error(string("Cannot read best corrections: ") + filename.Data());
+    vector<CorrectionParameter> selected;
+    string line;
+    getline(input, line); // TSV header.
+    while(getline(input, line)){
+        if(line.empty()) continue;
+        istringstream row(line);
+        string num, den, part, v1, v2, penalty;
+        if(!(row >> num >> den >> part >> v1 >> v2 >> penalty)) throw runtime_error("Invalid BestCorrections.tsv row.");
+        double score = strtod(penalty.c_str(), nullptr);
+        if(!isfinite(score)) throw runtime_error("A correction stage has no usable candidate.");
+        vector<TString> vars = {TString(v1)};
+        if(v2 != "-") vars.push_back(TString(v2));
+        selected.push_back({TString(num), TString(den), TString(part), vars});
+    }
+    if(selected.size() != CorrPars.size()) throw runtime_error("Best correction file has different stages.");
+    for(int i=0;i<CorrPars.size();++i){
+        if(selected[i].num != CorrPars[i].num or selected[i].den != CorrPars[i].den or selected[i].p_cor != CorrPars[i].p_cor)
+            throw runtime_error("Best correction file has different stages or trigger settings.");
+        vector<TString> vars = {selected[i].var_cor[0], selected[i].var_cor.size()>1 ? selected[i].var_cor[1] : TString("")};
+        auto allowed = CorrectionVariables(selected[i].p_cor);
+        if(find(allowed.begin(), allowed.end(), vars) == allowed.end()) throw runtime_error("Unknown correction variables.");
+    }
+    CorrPars = selected;
+}
+void BookCorrectionHistogram(TString key, TString title, int bins, double lo, double hi, int color = kBlack){
+    hMap[key] = new TH1D(key, title, bins, lo, hi);
+    hMap[key]->SetDirectory(nullptr);
+    hMap[key]->Sumw2();
+    hMap[key]->SetLineColor(color);
+}
+void InitializeCorrectionHistograms(TString tgt){
+    SetCorrectionCheckLists();
+    BookCorrectionHistogram("h_weight", ";Correction weight;Events", 1000, 0, 50);
+    BookCorrectionHistogram("h_weightRec", ";Correction weightRec;Events", 1000, 0, 50);
+    BookCorrectionHistogram("h_weightRatio", ";WeightRatio;Events", 1000, 0, 5);
+    BookCorrectionHistogram("h_weightDiff", ";Correction weightDiff;Events", 1000, -15, 15);
+    BookCorrectionHistogram("hgood_weight", ";Correction weight;Events", 1000, 0, 50);
+    BookCorrectionHistogram("hgood_weightRec", ";Correction weightRec;Events", 1000, 0, 50);
+    BookCorrectionHistogram("hgood_weightRatio", ";WeightRatio;Events", 1000, 0, 5);
+    BookCorrectionHistogram("hgood_weightDiff", ";Correction weightDiff;Events", 1000, -15, 15);
+    BookCorrectionHistogram("hbad_weight", ";Correction weight;Events", 1000, 0, 50);
+    BookCorrectionHistogram("hbad_weightRec", ";Correction weightRec;Events", 1000, 0, 50);
+    BookCorrectionHistogram("hbad_weightRatio", ";WeightRatio;Events", 1000, 0, 5);
+    BookCorrectionHistogram("hbad_weightDiff", ";Correction weightDiff;Events", 1000, -15, 15);
+
+    for(int ic = 0; ic < CorrPars.size(); ++ic){
+        auto cp = CorrPars[ic];
+        TString key = "h_weight_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";Correction weight;Events", 1000, 0, 5);
+        key = "h_weightRec_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";Correction weightRec;Events", 1000, 0, 5);
+        key = "hgood_weight_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";Correction weight;Events", 1000, 0, 5);
+        key = "hgood_weightRec_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";Correction weightRec;Events", 1000, 0, 5);
+        key = "hbad_weight_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";Correction weight;Events", 1000, 0, 5);
+        key = "hbad_weightRec_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";Correction weightRec;Events", 1000, 0, 5);
+
+        key = "h_weightRatio_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";WeightRatio;Events", 1000, 0, 5);
+        key = "h_weightDiff_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";Correction weightDiff;Events", 1000, -15, 15);
+        key = "hgood_weightRatio_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";WeightRatio;Events", 1000, 0, 5);
+        key = "hgood_weightDiff_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";Correction weightDiff;Events", 1000, -15, 15);
+        key = "hbad_weightRatio_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";WeightRatio;Events", 1000, 0, 5);
+        key = "hbad_weightDiff_" + cp.p_cor;
+        BookCorrectionHistogram(key, ";Correction weightDiff;Events", 1000, -15, 15);
+    }
+    BookCorrectionHistogram("h_final_weights", ";Truth accepted/rejected, reco accepted/rejected;Events", 4, 0, 4);
+    BookCorrectionHistogram("h_reco_available", ";XiPflag: valid/invalid reconstructed arrays;Events", 2, 0, 2);
+    for(auto cp:CorrPars){
+        for(auto vars:CorrectionVariables(cp.p_cor)){
+            TString key = "WeightCheck" + Correction(cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+            BookCorrectionHistogram(key, ";Usable/rejected inverse-efficiency weights;Events", 2, 0, 2);
+        }
     }
     int nbinx;
     double minx, maxx;
-    TString Xtitle;
-    for(auto chk: CheckLists){
-        for(auto p:particle){
-            for(int iv=0;iv<variable.size();++iv){
-                auto v = variable[iv];
-                TString key = AcceptanceHistTitle1D(tgt, p, v, chk);
-                Xtitle = SetAxis(p, v, nbinx, minx, maxx);
-                hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-                hMap[key] -> SetLineColor(colorMap[chk]);
-    for(auto cp:CorrPars){
-        TString num = cp.num;
-        if(num != chk) continue;
-        TString den = cp.den;
-        TString pc = cp.p_cor;
-        for(int iv1 = 0; iv1 < variable.size();++iv1){
-            auto v1 = variable[iv1];
-            key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1);
-            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-            hMap[key] -> SetLineColor(colorMap[chk]);
-            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
-                auto v2 = variable[iv2];
-                key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1, v2);
-                hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-                hMap[key] -> SetLineColor(colorMap[chk]);
-            }//iv2
-        }//iv1
-    }//cp
-            }//iv
-        }//particle
-        for(auto ev: EventVars){
-            TString key = EventTitle(tgt, ev, chk);
-            Xtitle = SetEventVarAxis(ev, nbinx, minx, maxx);
-            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-            hMap[key] -> SetLineColor(colorMap[chk]);
-    for(auto cp:CorrPars){
-        TString num = cp.num;
-        if(num != chk) continue;
-        TString den = cp.den;
-        TString pc = cp.p_cor;
-        for(int iv1 = 0; iv1 < variable.size();++iv1){
-            auto v1 = variable[iv1];
-            key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1);
-            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-            hMap[key] -> SetLineColor(colorMap[chk]);
-            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
-                auto v2 = variable[iv2];
-                key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1, v2);
-                hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-                hMap[key] -> SetLineColor(colorMap[chk]);
-            }//iv2
-        }//iv1
-    }//cp
-        }//ev
-    }//CheckLists
-    for(auto p:particle){
-        for(int iv=0;iv<variable.size();++iv){
-            auto v = variable[iv];
-            TString key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt"+trig);
-            Xtitle = SetAxis(p, v, nbinx, minx, maxx);
-            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-            key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor"+trig);
-            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-            key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiCor"+trig);
-            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-            key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcpt"+trig);
-            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-            key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcptCor"+trig);
-            hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-        }
-    }
-    for(auto ev: EventVars){
-        TString key = EventTitle(tgt, ev, "XiAcpt"+trig);
-        Xtitle = SetEventVarAxis(ev, nbinx, minx, maxx);
-        hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-        key = EventTitle(tgt, ev, "XiAcptCor"+trig);
-        hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-        key = EventTitle(tgt, ev, "GoodXiCor"+trig);
-        hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-        key = EventTitle(tgt, ev, "XiRecAcpt"+trig);
-        hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-        key = EventTitle(tgt, ev, "XiRecAcptCor"+trig);
-        hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
-    }
-};
-void LoadOrAddHistogram(TString key, TFile* file, TString chk = ""){
-    if(hMap.find(key) == hMap.end()){
-        hMap[key] = (TH1*)file->Get(key);
-        if(chk == ""){
-            cout<<"Warning: No CheckList specified for histogram "<<key<<"."<<endl;
-        }
-        else{
-            hMap[key] -> SetLineColor(colorMap[chk]);
-        }
-    }
-    else{
-        hMap[key] ->Add((TH1*)file->Get(key));
-    }
-}
-void LoadCorrectionHistograms(TFile* file,TString tgt){
-    cout<<"Loading histograms from file: "<<file->GetName()<<endl;
-    LoadOrAddHistogram("h_weight", file);
-    for(auto cp:CorrPars){
-        TString num = cp.num;
-        TString den = cp.den;
-        bool num_acpt = 0, den_acpt = 0;
-        for(auto chk:CheckLists){
-            if(chk == num) num_acpt = 1;
-            if(chk == den) den_acpt = 1;
-        }
-        if(!num_acpt) CheckLists.push_back(num);
-        if(!den_acpt) CheckLists.push_back(den);
-    }
     for(auto chk:CheckLists){
-        cout<<"CheckList: "<<chk<<endl;
-    }
-    for(auto chk: CheckLists){
         for(auto p:particle){
-            for(int iv=0;iv<variable.size();++iv){
-                auto v = variable[iv];
+            for(auto v:variable){
+                TString title = SetAxis(p, v, nbinx, minx, maxx);
                 TString key = AcceptanceHistTitle1D(tgt, p, v, chk);
-                LoadOrAddHistogram(key, file, chk);
-    for(auto cp:CorrPars){
-        TString num = cp.num;
-        if(num != chk) continue;
-        TString den = cp.den;
-        TString pc = cp.p_cor;
-        for(int iv1 = 0; iv1 < variable.size();++iv1){
-            auto v1 = variable[iv1];
-            key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1);
-            LoadOrAddHistogram(key, file, chk);
-            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
-                auto v2 = variable[iv2];
-                key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1, v2);
-                LoadOrAddHistogram(key, file, chk);
-            }//iv2
-        }//iv1
-    }//cp
-            }//iv
-        }//particle
-        for(auto ev: EventVars){
-            TString key = EventTitle(tgt, ev, chk);
-            LoadOrAddHistogram(key, file, chk);
-    for(auto cp:CorrPars){
-        TString num = cp.num;
-        if(num != chk) continue;
-        TString den = cp.den;
-        TString pc = cp.p_cor;
-        for(int iv1 = 0; iv1 < variable.size();++iv1){
-            auto v1 = variable[iv1];
-            key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1);
-            LoadOrAddHistogram(key, file, chk);
-            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
-                auto v2 = variable[iv2];
-                key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1, v2);
-                LoadOrAddHistogram(key, file, chk);
-            }//iv2
-        }//iv1
-    }//cp
-        }//ev
-    }//CheckLists
-    vector<TString> XiAcptHists = {
-        "XiAcpt"+trig, "XiAcptCor"+trig, "GoodXiCor"+trig,
-        "XiRecAcpt"+trig, "XiRecAcptCor"+trig
-    };
-    for(auto xiconf: XiAcptHists){
-        for(auto p:particle){
-            for(int iv=0;iv<variable.size();++iv){
-                auto v = variable[iv];
-                TString key = AcceptanceHistTitle1D(tgt, p, v, xiconf);
-                LoadOrAddHistogram(key, file);
+                BookCorrectionHistogram(key, key+";"+title, nbinx, minx, maxx, colorMap[chk]);
+                for(auto cp:CorrPars){
+                    if(cp.num != chk) continue;
+                    for(auto vars:CorrectionVariables(cp.p_cor)){
+                        key = CorrectionHists(tgt, p, v, chk, cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+                        BookCorrectionHistogram(key, key+";"+title, nbinx, minx, maxx, colorMap[chk]);
+                    }
+                }
             }
         }
-        for(auto ev: EventVars){
-            TString key = EventTitle(tgt, ev, xiconf);
-            LoadOrAddHistogram(key, file);
+        for(auto ev:EventVars){
+            TString title = SetEventVarAxis(ev, nbinx, minx, maxx);
+            TString key = EventTitle(tgt, ev, chk);
+            BookCorrectionHistogram(key, key+";"+title, nbinx, minx, maxx, colorMap[chk]);
+            for(auto cp:CorrPars){
+                if(cp.num != chk) continue;
+                for(auto vars:CorrectionVariables(cp.p_cor)){
+                    key = CorrectedEventTitle(tgt, ev, chk, cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+                    BookCorrectionHistogram(key, key+";"+title, nbinx, minx, maxx, colorMap[chk]);
+                }
+            }
         }
+    }
+    for(auto conf:FinalXiPChecks()){
+        for(auto p:particle){
+            for(auto v:variable){
+                TString title = SetAxis(p, v, nbinx, minx, maxx);
+                TString key = AcceptanceHistTitle1D(tgt, p, v, conf+trig);
+                BookCorrectionHistogram(key, key+";"+title, nbinx, minx, maxx);
+            }
+        }
+        for(auto ev:EventVars){
+            TString title = SetEventVarAxis(ev, nbinx, minx, maxx);
+            TString key = EventTitle(tgt, ev, conf+trig);
+            BookCorrectionHistogram(key, key+";"+title, nbinx, minx, maxx);
+        }
+    }
+}
+void LoadOrAddHistogram(TString key, TFile* file, TString chk = ""){
+    LoadOrAdd1DHistogram(key, file);
+    if(chk != "") hMap[key]->SetLineColor(colorMap[chk]);
+}
+void LoadCorrectionHistograms(TFile* file,TString tgt){
+    if(file == nullptr or file->IsZombie()) throw runtime_error("Cannot read correction worker file.");
+    TNamed* parameters = dynamic_cast<TNamed*>(file->Get("CorrectionParameters"));
+    if(parameters == nullptr or TString(parameters->GetTitle()) != CorrectionParameters())
+        throw runtime_error("Correction worker files use different parameters. Rerun workers with matching CorrPars.");
+    cout<<"Loading histograms from "<<file->GetName()<<endl;
+    SetCorrectionCheckLists();
+    for(auto key:{"h_weight", "h_final_weights", "h_reco_available",
+         "h_weightRec", "hgood_weight", "hgood_weightRec", "hbad_weight", "hbad_weightRec",
+        "h_weightRatio", "h_weightDiff", 
+        "hgood_weightRatio", "hgood_weightDiff", "hbad_weightRatio", "hbad_weightDiff"
+        }) LoadOrAddHistogram(key, file);
+    for(auto cp:CorrPars){
+        TString key = "h_weight_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "h_weightRec_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "hgood_weight_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "hgood_weightRec_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "hbad_weight_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "hbad_weightRec_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "h_weightRatio_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "h_weightDiff_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "hgood_weightRatio_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "hgood_weightDiff_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "hbad_weightRatio_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+        key = "hbad_weightDiff_" + cp.p_cor;
+        LoadOrAddHistogram(key, file);
+    }
+    for(auto cp:CorrPars){
+        for(auto vars:CorrectionVariables(cp.p_cor))
+            LoadOrAddHistogram("WeightCheck"+Correction(cp.p_cor, cp.num, cp.den, vars[0], vars[1]), file);
+    }
+    for(auto chk:CheckLists){
+        for(auto p:particle){
+            for(auto v:variable){
+                LoadOrAddHistogram(AcceptanceHistTitle1D(tgt, p, v, chk), file, chk);
+                for(auto cp:CorrPars){
+                    if(cp.num != chk) continue;
+                    for(auto vars:CorrectionVariables(cp.p_cor))
+                        LoadOrAddHistogram(CorrectionHists(tgt, p, v, chk, cp.p_cor, cp.num, cp.den, vars[0], vars[1]), file, chk);
+                }
+            }
+        }
+        for(auto ev:EventVars){
+            LoadOrAddHistogram(EventTitle(tgt, ev, chk), file, chk);
+            for(auto cp:CorrPars){
+                if(cp.num != chk) continue;
+                for(auto vars:CorrectionVariables(cp.p_cor))
+                    LoadOrAddHistogram(CorrectedEventTitle(tgt, ev, chk, cp.p_cor, cp.num, cp.den, vars[0], vars[1]), file, chk);
+            }
+        }
+    }
+    for(auto conf:FinalXiPChecks()){
+        for(auto p:particle){
+            for(auto v:variable) LoadOrAddHistogram(AcceptanceHistTitle1D(tgt, p, v, conf+trig), file);
+        }
+        for(auto ev:EventVars) LoadOrAddHistogram(EventTitle(tgt, ev, conf+trig), file);
     }
 }
 class Event{
@@ -396,6 +370,7 @@ class Event{
         map<TString, vector<TVector3>> DC;// DataContainer
         map<TString, vector<TVector3>> DCRec;// DataContainer
         TString tgt;
+        bool hasRec = false;
     public:
         Event(g4genfitcarbon* g, TString t): gf(g), tgt(t){
             P.SetXYZ(gf->G4pmom_x, gf->G4pmom_y, gf->G4pmom_z);
@@ -422,7 +397,8 @@ class Event{
                 {"Xi",{Xi,Pi2,VXi}},
                 {"ScatP",{PScat,XiProd,VXiProd}}
             };
-            if(gf->Xiflag){
+            // XiPflag is the only observed-event flag. No MC proton flag is consulted here.
+            if(XiPOfflineFlag(gf)){
                 PRec.SetXYZ(gf->KFXiDecaysMom_x->at(0), gf->KFXiDecaysMom_y->at(0), gf->KFXiDecaysMom_z->at(0));
                 Pi1Rec.SetXYZ(gf->KFXiDecaysMom_x->at(1), gf->KFXiDecaysMom_y->at(1), gf->KFXiDecaysMom_z->at(1));
                 Pi2Rec.SetXYZ(gf->KFXiDecaysMom_x->at(2), gf->KFXiDecaysMom_y->at(2), gf->KFXiDecaysMom_z->at(2));
@@ -433,7 +409,8 @@ class Event{
                 VXiRec.SetXYZ(gf->GFXiDecayVtx_x, gf->GFXiDecayVtx_y, gf->GFXiDecayVtx_z);
                 VXiProdRec.SetXYZ(gf->KFXiProductionVtx_x, gf->KFXiProductionVtx_y, gf->KFXiProductionVtx_z);
                 if(gf->XiPflag){
-                    PScatRec.SetXYZ(gf->XiResidualsMom_x->at(0), gf->XiResidualsMom_y->at(0), gf->XiResidualsMom_z->at(0));
+                    hasRec = true;
+                    PScatRec.SetXYZ(gf->XipVtxScatPMom_x, gf->XipVtxScatPMom_y, gf->XipVtxScatPMom_z);
                 }
             }
             else{
@@ -461,6 +438,7 @@ class Event{
                 {"ScatP",{PScatRec,XiProdRec,VXiProdRec}}
             };
         }
+        bool HasReconstruction(){ return hasRec; }
         map<TString, vector<TVector3>> GetDataContainer(){
             return DC;
         }
@@ -469,64 +447,59 @@ class Event{
         }
         bool Good(){
             if(Xi.Mag() <1e-5) return false;
+            if(isnan(Xi.Mag()) or isinf(Xi.Mag())) return false;
             #if TrigB
             if(gf->nhHtof < 2) return false;
             #endif
             return true;
         }
         double GetWeightDC(TString part, TString num, TString den, TString v1, TString v2 = "", map<TString, vector<TVector3>> DC_ = map<TString, vector<TVector3>>()){
-            TString key;
-            double var1,var2;
-            var1 = GetVariable(DC_[part][0], DC_[part][1], DC_[part][2], v1);
-            double w;
-            if(v2 != ""){
-                var2 = GetVariable(DC_[part][0], DC_[part][1], DC_[part][2], v2);
-                key = EffTitle2D(tgt, part, v1, v2, num, den);
+            auto found = DC_.find(part);
+            if(found == DC_.end() or found->second.size() < 3) return numeric_limits<double>::quiet_NaN();
+            auto vectors = found->second;
+            TString key = v2 == "" ? EffTitle1D(tgt, part, v1, num, den) : EffTitle2D(tgt, part, v1, v2, num, den);
+            TString distkey;
 #if PerDist
-                if(v1 != "DistT" and v2 != "DistT" and part != "Xi" and part != "Pi2") key += GetDistKey(DC_[part][2]);
+            if(v1 != "DistT" and v2 != "DistT" and part != "Xi" and part != "Pi2") distkey = GetDistKey(vectors[2]);
 #endif
 #if PerXiDist
-                if(v1 != "DistT" and v2 != "DistT" and (part == "Xi" or part == "Pi2")) key += GetDistKey(DC_[part][2]);
+            if(v1 != "DistT" and v2 != "DistT" and (part == "Xi" or part == "Pi2")) distkey = GetDistKey(vectors[2]);
 #endif
-                if(effMap[key] == nullptr){
-                    cout<<"Efficiency histogram "<<key<<" not found!"<<endl;
-                    return 1.;
-                }
-                w = effMap[key]->GetEfficiency(effMap[key]->FindFixBin(var1, var2));
-                w = 1./w;
+            key += distkey;
+            auto eff = effMap.find(key);
+            if(eff == effMap.end() and v2 != ""){
+                key = EffTitle2D(tgt, part, v2, v1, num, den) + distkey;
+                eff = effMap.find(key);
+                swap(v1, v2);
             }
-            else{
-                key = EffTitle1D(tgt, part, v1, num, den);
-#if PerDist
-                if(v1 != "DistT" and part != "Xi" and part != "Pi2") key += GetDistKey(DC_[part][2]);
-#endif
-#if PerXiDist
-                if(v1 != "DistT" and (part == "Xi" or part == "Pi2")) key += GetDistKey(DC_[part][2]);
-#endif
-                if(effMap[key] == nullptr){
-                    cout<<"Efficiency histogram "<<key<<" not found!"<<endl;
-                    return 1.;
-                }
-                w = effMap[key]->GetEfficiency(effMap[key]->FindFixBin(var1));
-                w = 1./w;
-            }
-            return w;
+            if(eff == effMap.end() or eff->second == nullptr)
+                throw runtime_error(string("Efficiency histogram not found: ") + key.Data());
+            double x = GetXiPVariable(vectors[0], vectors[1], vectors[2], part, v1);
+            double y = v2 != "" ? GetXiPVariable(vectors[0], vectors[1], vectors[2], part, v2) : 0;
+            if(!isfinite(x) or !isfinite(y)) return numeric_limits<double>::quiet_NaN();
+            const TH1* total = eff->second->GetTotalHistogram();
+            // Keep the standard ROOT map-bin lookup, including populated under/overflow bins.
+            int bin = v2 == "" ? eff->second->FindFixBin(x) : eff->second->FindFixBin(x, y);
+            if(total->GetBinContent(bin) <= 0) return numeric_limits<double>::quiet_NaN();
+            double value = eff->second->GetEfficiency(bin);
+            return value > 0 and isfinite(value) ? 1./value : numeric_limits<double>::quiet_NaN();
         }
         double GetWeight(TString part, TString num, TString den, TString v1, TString v2 = ""){
             return GetWeightDC(part, num, den, v1, v2, DC);
         }
         double GetWeightRec(TString part, TString num, TString den, TString v1, TString v2 = ""){
+            if(!hasRec) return numeric_limits<double>::quiet_NaN();
             return GetWeightDC(part, num, den, v1, v2, DCRec);
         }
         double GetEventVariable(TString var){
-            double val;
+            double val = numeric_limits<double>::quiet_NaN();
             if(var == "ctau_L"){
                 double gb_L = L.Mag()/mLd;
                 val = (VL - VXi).Mag() / gb_L;
             }
             else if(var == "ctau_Xi"){
                 double gb_Xi = Xi.Mag()/mXi;
-                val = (VL - VXi).Mag() / gb_Xi;
+                val = (VXi - VXiProd).Mag() / gb_Xi;
             }
             else if(var == "CThKK"){
                 TLorentzVector LVKM(Km, hypot(Km.Mag(), mk));
@@ -583,7 +556,7 @@ class Event{
                 auto Boost = LVXiPScat.BoostVector();
                 LVPScat.Boost(-Boost);
                 TVector3 TVPScat = LVPScat.Vect();
-                TVector3 TVXiProd = LVXiProd.Vect();
+                TVector3 TVXiProd = LVXiPScat.Vect(); // Pair lab direction: proton helicity axis.
                 val = cos(TVPScat.Angle(TVXiProd));
             }
             else if(var == "Collinearity"){
@@ -594,14 +567,14 @@ class Event{
             return val;
         }
         double GetEventVariableRec(TString var){
-            double val;
+            double val = numeric_limits<double>::quiet_NaN();
             if(var == "ctau_L"){
                 double gb_L = LRec.Mag()/mLd;
                 val = (VLRec - VXiRec).Mag() / gb_L;
             }
             else if(var == "ctau_Xi"){
                 double gb_Xi = XiRec.Mag()/mXi;
-                val = (VLRec - VXiRec).Mag() / gb_Xi;
+                val = (VXiRec - VXiProdRec).Mag() / gb_Xi;
             }
             else if(var == "CThKK"){
                 TLorentzVector LVKM(Km, hypot(Km.Mag(), mk));
@@ -658,7 +631,7 @@ class Event{
                 auto Boost = LVXiPScat.BoostVector();
                 LVPScat.Boost(-Boost);
                 TVector3 TVPScat = LVPScat.Vect();
-                TVector3 TVXiProd = LVXiProd.Vect();
+                TVector3 TVXiProd = LVXiPScat.Vect(); // Pair lab direction: proton helicity axis.
                 val = cos(TVPScat.Angle(TVXiProd));
             }
             else if(var == "Collinearity"){
@@ -669,279 +642,201 @@ class Event{
             return val;
         }
 };
-bool DebugLog = 1;
+bool GoodCorrectionWeight(double w){ return isfinite(w) and w > 0 and w <= weight_th; }
+void FillCorrectionHistogram(TString key, double value, double weight = 1.){
+    if(isfinite(value) and isfinite(weight) and weight > 0) hMap[key]->Fill(value, weight);
+}
+void FillFinalXiP(Event &event, TString tgt, TString conf, double weight = 1., bool reconstructed = false){
+    auto DC = reconstructed ? event.GetDataContainerRec() : event.GetDataContainer();
+    for(auto p:particle){
+        for(auto v:variable){
+            double value = GetXiPVariable(DC[p][0], DC[p][1], DC[p][2], p, v);
+            FillCorrectionHistogram(AcceptanceHistTitle1D(tgt, p, v, conf+trig), value, weight);
+        }
+    }
+    for(auto ev:EventVars){
+        double value = reconstructed ? event.GetEventVariableRec(ev) : event.GetEventVariable(ev);
+        FillCorrectionHistogram(EventTitle(tgt, ev, conf+trig), value, weight);
+    }
+}
 void FillHistograms(g4genfitcarbon* gf, TString tgt){
     Event event(gf, tgt);
-    if(DebugLog) cout<<Form("Processing event...")<<endl;
     if(!event.Good()) return;
-    if(DebugLog) cout<<Form("Loading event data...")<<endl;
     auto DC = event.GetDataContainer();
-    auto DCRec = event.GetDataContainerRec();
-    TString key;
-    double w;
-    double weight = 1;
-    double weightRec = 1;
+    bool observed = gf->XiPflag;
+    bool matched = gf->xigood and gf->p_scat_good;
+    // References and uncorrected samples are independent of weight support or rejection.
+    for(auto chk:CheckLists){
+        if(!SuffixCheck(chk, gf) or !TrigCheck(trig, gf)) continue;
+        for(auto p:particle){
+            for(auto v:variable)
+                FillCorrectionHistogram(AcceptanceHistTitle1D(tgt, p, v, chk), GetXiPVariable(DC[p][0], DC[p][1], DC[p][2], p, v));
+        }
+        for(auto ev:EventVars) FillCorrectionHistogram(EventTitle(tgt, ev, chk), event.GetEventVariable(ev));
+    }
+    if(observed){
+        FillFinalXiP(event, tgt, "XiPflag");
+        hMap["h_reco_available"]->Fill(event.HasReconstruction() ? .5 : 1.5);
+        if(event.HasReconstruction()){
+            FillFinalXiP(event, tgt, "XiPflagRec", 1., true);
+            if(matched) FillFinalXiP(event, tgt, "GoodXiAndScatPGoodRec", 1., true);
+        }
+    }
+    // Each candidate corrects its own numerator to its own denominator, as in XiAcceptanceCheck.
     for(auto cp:CorrPars){
-        TString num = cp.num;
-        TString den = cp.den;
-        TString pc = cp.p_cor;
-        if(DebugLog) cout<<Form("Applying correction for %s over %s...", num.Data(), den.Data())<<endl;
-        vector<TString> var_cor = cp.var_cor;
-        TString v1 = var_cor[0];
-        TString v2 = var_cor.size() > 1 ? var_cor[1] : "";
-        if(DebugLog) cout<<"Loading Gen weight";
-        weight *= event.GetWeight(pc, num, den, v1, v2);
-        if(DebugLog) cout<<Form(" for %s over %s: w = %g", num.Data(), den.Data(), w)<<endl;
-        if(gf->XiPflag){
-            if(DebugLog) cout<<"Loading weight";
-            double w = event.GetWeightRec(pc, num, den, v1, v2);
-            if(DebugLog) cout<<Form(" for %s over %s: w = %g", num.Data(), den.Data(), w)<<endl;
-            if(w > weight_th or isnan(w)){
-                double var1 = GetVariable(DCRec[pc][0], DCRec[pc][1], DCRec[pc][2], v1);
-                double var2 = v2 != "" ? GetVariable(DCRec[pc][0], DCRec[pc][1], DCRec[pc][2], v2) : 0;
-                cout<<Form("Event weightRec for %s correction over threshold! w = %g, event count over threshold = %d", Correction(pc,num,den,v1,v2).Data(), w, over_cnt)<<endl;
-                cout<<Form("Event variables: %s = %g, %s = %g", v1.Data(), var1, v2.Data(), var2)<<endl;
+        if(!SuffixCheck(cp.num, gf) or !TrigCheck(trig, gf)) continue;
+        for(auto vars:CorrectionVariables(cp.p_cor)){
+            double w = event.GetWeight(cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+            TString stats = "WeightCheck" + Correction(cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+            hMap[stats]->Fill(GoodCorrectionWeight(w) ? .5 : 1.5);
+            if(!GoodCorrectionWeight(w)) continue;
+            for(auto p:particle){
+                for(auto v:variable){
+                    TString key = CorrectionHists(tgt, p, v, cp.num, cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+                    FillCorrectionHistogram(key, GetXiPVariable(DC[p][0], DC[p][1], DC[p][2], p, v), w);
+                }
             }
-            weightRec *= w;
-        }
-    }
-    if(weight > weight_th) return;
-    if(isnan(weight)) return;
-    if(weightRec > weight_th or isnan(weightRec)){
-        over_cnt++;
-        cout<<Form("w = %g, wRec = %g, event count over threshold = %d", weight, weightRec, over_cnt)<<endl;
-    }
-#if SecondaryCorr 
-    if(gf->Xiflag){
-        for(auto ev:EventVars){
-            for(auto sec:SecondaryCorrection){
-                TString sec_name = sec.first;
-                if(ev != sec_name) continue;
-                TGraph* gr = sec.second;
-                double var = event.GetEventVariableRec(sec_name);
-                double eff_sec = gr->Eval(var);
-                cout<<Form("Secondary correction for %s: var = %g, eff = %g", sec_name.Data(), var, eff_sec)<<endl;
-                weightRec *= 1./eff_sec;
+            for(auto ev:EventVars){
+                TString key = CorrectedEventTitle(tgt, ev, cp.num, cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+                FillCorrectionHistogram(key, event.GetEventVariable(ev), w);
             }
         }
     }
-#endif
-    bool filled_weight = 0;
-    for(auto p:particle){
-        for(int iv=0;iv<variable.size();++iv){
-            auto v = variable[iv];
-            for(auto chk: CheckLists){
-                if(DebugLog) cout<<Form("Filling histograms for particle %s, variable %s, check %s...", p.Data(), v.Data(), chk.Data())<<endl;
-                if(!SuffixCheck(chk, gf)) continue;
-                if(!TrigCheck(trig, gf)) continue;
-                key = AcceptanceHistTitle1D(tgt, p, v, chk);
-                hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1], DC[p][2], v));
-        for(auto cp:CorrPars){
-            TString num = cp.num;
-            if(num != chk) continue;
-            TString den = cp.den;
-            TString pc = cp.p_cor;
-            for(int iv1 = 0; iv1 < variable.size();++iv1){
-                auto v1 = variable[iv1];
-                if(pc == "P" or pc == "Pi1" or pc == "Pi2"){
-                    if(v1 == "CosOpen") continue;
-                }
-                w = event.GetWeight(pc, num, den, v1);
-                key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1);
-                if(w < weight_th and !isnan(w)){
-                    hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1], DC[p][2], v), w);
-                }
-                for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
-                    auto v2 = variable[iv2];
-                    if(pc == "P" or pc == "Pi1" or pc == "Pi2"){
-                        if(v2 == "CosOpen") continue;
-                    }
-                    w = event.GetWeight(pc, num, den, v1, v2);
-                    key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1, v2);
-                    if(w < weight_th and !isnan(w)){
-                        hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1], DC[p][2], v), w);
-                    }
-                }
-            }
+    if(!observed and !matched) return;
+    double weight = 1., weightRec = 1.;
+    for(auto cp:CorrPars){
+        TString v1 = cp.var_cor[0], v2 = cp.var_cor.size()>1 ? cp.var_cor[1] : TString("");
+        double w_step = event.GetWeight(cp.p_cor, cp.num, cp.den, v1, v2);
+        TString wkey = "h_weight_" + cp.p_cor;
+        hMap[wkey]->Fill(w_step);
+        weight *= w_step;
+        // Do not require truth matching or an MC-only proton-tracking flag for reconstructed candidates.
+        double w_stepRec = event.GetWeightRec(cp.p_cor, cp.num, cp.den, v1, v2);
+        weightRec *= w_stepRec;
+        wkey = "h_weightRec_" + cp.p_cor;
+        hMap[wkey]->Fill(w_stepRec);
+        wkey = "h_weightRatio_" + cp.p_cor;
+        hMap[wkey]->Fill(w_stepRec/w_step);
+        wkey = "h_weightDiff_" + cp.p_cor;
+        hMap[wkey]->Fill(w_stepRec-w_step);
+        if(matched){
+            wkey = "hgood_weight_" + cp.p_cor;
+            hMap[wkey]->Fill(w_step);
+            wkey = "hgood_weightRec_" + cp.p_cor;
+            hMap[wkey]->Fill(w_stepRec);
+           
+            wkey = "hgood_weightRatio_" + cp.p_cor;
+            hMap[wkey]->Fill(w_stepRec/w_step);
+            wkey = "hgood_weightDiff_" + cp.p_cor;
+            hMap[wkey]->Fill(w_stepRec-w_step);
         }
-            }//chk
-            if(SuffixCheck("XiPflag", gf)){
-                if(DebugLog) cout<<Form("Filling histograms for particle %s, variable %s, XiPflag...", p.Data(), v.Data())<<endl;
-                key = AcceptanceHistTitle1D(tgt, p, v, "XiPflag" + trig);
-                hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v));
-                key = AcceptanceHistTitle1D(tgt, p, v, "XiPflagCor" + trig);
-                hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v), weight);
-                if(weightRec < weight_th and !isnan(weightRec)){
-                    key = AcceptanceHistTitle1D(tgt, p, v, "XiPflagRec" + trig);
-                    hMap[key]->Fill(GetVariable(DCRec[p][0], DCRec[p][1],DCRec[p][2], v));
-                    key = AcceptanceHistTitle1D(tgt, p, v, "XiPflagRecCor" + trig);
-                    hMap[key]->Fill(GetVariable(DCRec[p][0], DCRec[p][1],DCRec[p][2], v), weightRec);
-                    if(!filled_weight){
-                        hMap["h_weight"]->Fill(weightRec);
-                        filled_weight = 1;
-                    }
-                }
-            }
-            if(SuffixCheck("GoodXiAndScatPGood", gf)){
-                if(DebugLog) cout<<Form("Filling histograms for particle %s, variable %s, GoodXiAndScatPGood...", p.Data(), v.Data())<<endl;
-                key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiAndScatPGoodCor" + trig);
-                if(weightRec < weight_th and !isnan(weightRec)){
-                    hMap[key]->Fill(GetVariable(DC[p][0], DC[p][1],DC[p][2], v), weight);
-                }
-            }
-        }//iv
-    }//particle
-    for(auto ev:EventVars){
-        for(auto chk: CheckLists){
-            if(!SuffixCheck(chk, gf)) continue;
-            if(!TrigCheck(trig, gf)) continue;
-            key = EventTitle(tgt, ev, chk);
-            hMap[key]->Fill(event.GetEventVariable(ev));
-            for(auto cp:CorrPars){
-                TString num = cp.num;
-                if(num != chk) continue;
-                TString den = cp.den;
-                TString pc = cp.p_cor;
-                vector<TString> var_cor = cp.var_cor;
-                TString v1 = var_cor[0];
-                TString v2 = var_cor.size() > 1 ? var_cor[1] : "";
-                w = event.GetWeight(pc, num, den, v1, v2);
-                key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1, v2);
-                if(w < weight_th and !isnan(w)){
-                    hMap[key]->Fill(event.GetEventVariable(ev), w);
-                }
-            }
+        else{
+            wkey = "hbad_weight_" + cp.p_cor;
+            hMap[wkey]->Fill(w_step);
+            wkey = "hbad_weightRec_" + cp.p_cor;
+            hMap[wkey]->Fill(w_stepRec);
+            
+            wkey = "hbad_weightRatio_" + cp.p_cor;
+            hMap[wkey]->Fill(w_stepRec/w_step);
+            wkey = "hbad_weightDiff_" + cp.p_cor;
+            hMap[wkey]->Fill(w_stepRec-w_step);
         }
-        if(SuffixCheck("XiPflag", gf)){
-            key = EventTitle(tgt, ev, "XiPflag" + trig);
-            hMap[key]->Fill(event.GetEventVariable(ev));
-            key = EventTitle(tgt, ev, "XiPflagCor" + trig);
-            hMap[key]->Fill(event.GetEventVariable(ev), weight);
-            if(weightRec < weight_th and !isnan(weightRec)){
-                key = EventTitle(tgt, ev, "XiPflagRec" + trig);
-                hMap[key]->Fill(event.GetEventVariableRec(ev));
-                key = EventTitle(tgt, ev, "XiPflagRecCor" + trig);
-                hMap[key]->Fill(event.GetEventVariableRec(ev), weightRec);
-            }
+    }
+    hMap["h_weight"]->Fill(weight);
+    hMap["h_weightRec"]->Fill(weightRec);
+    hMap["h_weightRatio"]->Fill(weightRec/weight);
+    hMap["h_weightDiff"]->Fill(weightRec-weight);
+    if(matched){
+        hMap["hgood_weight"]->Fill(weight);
+        hMap["hgood_weightRec"]->Fill(weightRec);
+        hMap["hgood_weightRatio"]->Fill(weightRec/weight);
+        hMap["hgood_weightDiff"]->Fill(weightRec-weight);
+    }
+    else{
+        hMap["hbad_weight"]->Fill(weight);
+        hMap["hbad_weightRec"]->Fill(weightRec);
+        hMap["hbad_weightRatio"]->Fill(weightRec/weight);
+        hMap["hbad_weightDiff"]->Fill(weightRec-weight);
+    }
+    if(GoodCorrectionWeight(weight)){
+        hMap["h_final_weights"]->Fill(.5);
+        if(observed){
+            FillFinalXiP(event, tgt, "XiPflagCor", weight);
         }
-        if(SuffixCheck("GoodXiAndScatPGood", gf)){
-            key = EventTitle(tgt, ev, "GoodXiAndScatPGoodCor" + trig);
-            if(weight < weight_th and !isnan(weight)){
-                hMap[key]->Fill(event.GetEventVariable(ev), weight);
-            }
+        if(matched) FillFinalXiP(event, tgt, "GoodXiAndScatPGoodCor", weight);
+    }
+    else{ hMap["h_final_weights"]->Fill(1.5); ++over_cnt; }
+    if(observed and event.HasReconstruction()){
+        if(GoodCorrectionWeight(weightRec)){
+            hMap["h_final_weights"]->Fill(2.5);
+            FillFinalXiP(event, tgt, "XiPflagRecCor", weightRec, true);
+            if(matched) FillFinalXiP(event, tgt, "GoodXiAndScatPGoodRecCor", weightRec, true);
         }
+        else hMap["h_final_weights"]->Fill(3.5);
     }
 }
 void NormalizeHistograms(TString tgt){
-    TString key;
+    // Only for figure display; CheckAcceptance writes raw counts before calling this.
     for(auto p:particle){
-        for(int iv=0;iv<variable.size();++iv){
-            double maxi = 0;
-            auto v = variable[iv];
-            key = AcceptanceHistTitle1D(tgt, p, v, "Gen" + trig);
-            maxi = hMap[key]->GetMaximum();
-            if(maxi == 0 ){
-                cout<<"Warning! Empty histogram for "<<key<<endl;
-                maxi = 1;
-                //Null results shuld also be recorded. 
+        for(auto v:variable){
+            double maxi = hMap[AcceptanceHistTitle1D(tgt, p, v, "Gen"+trig)]->GetMaximum();
+            if(maxi <= 0) maxi = 1;
+            for(auto chk:CheckLists){
+                hMap[AcceptanceHistTitle1D(tgt, p, v, chk)]->Scale(1./maxi);
+                for(auto cp:CorrPars){
+                    if(cp.num != chk) continue;
+                    for(auto vars:CorrectionVariables(cp.p_cor))
+                        hMap[CorrectionHists(tgt, p, v, chk, cp.p_cor, cp.num, cp.den, vars[0], vars[1])]->Scale(1./maxi);
+                }
             }
-            key = AcceptanceHistTitle1D(tgt, p, v, "XiAcpt"+trig);
-            hMap[key]->Scale(1./maxi);
-            hMap[key]->SetLineColor(kBlue);
-            key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcpt"+trig);
-            hMap[key]->Scale(1./maxi);
-            hMap[key]->SetLineColor(kGreen+2);
-            key = AcceptanceHistTitle1D(tgt, p, v, "XiAcptCor"+trig);
-            hMap[key]->Scale(1./maxi);
-            hMap[key]->SetLineColor(kRed);
-            hMap[key]->SetMarkerColor(kRed);
-            hMap[key]->SetMarkerStyle(20);
-            key = AcceptanceHistTitle1D(tgt, p, v, "XiRecAcptCor"+trig);
-            hMap[key]->Scale(1./maxi);
-            hMap[key]->SetLineColor(kOrange+7);
-            hMap[key]->SetMarkerColor(kOrange+7);
-            hMap[key]->SetMarkerStyle(20);
-
-            key = AcceptanceHistTitle1D(tgt, p, v, "GoodXiAndScatPGoodCor"+trig);
-            hMap[key]->Scale(1./maxi);
-            hMap[key]->SetLineColor(kGreen+2);
-            hMap[key]->SetMarkerColor(kGreen+2);
-            hMap[key]->SetMarkerStyle(20);
-            for(auto chk: CheckLists){
-                key = AcceptanceHistTitle1D(tgt, p, v, chk);
-                hMap[key]->Scale(1./maxi);
-    for(auto cp:CorrPars){
-        TString num = cp.num;
-        if(num != chk) continue;
-        TString den = cp.den;
-        TString pc = cp.p_cor;
-        for(int iv1 = 0; iv1 < variable.size();++iv1){
-            auto v1 = variable[iv1];
-            key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1);
-            hMap[key]->Scale(1./maxi);
-            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
-                auto v2 = variable[iv2];
-                key = CorrectionHists(tgt, p, v, chk, pc, num, den, v1, v2);
-                hMap[key]->Scale(1./maxi);
-            }
+            for(auto conf:FinalXiPChecks()) hMap[AcceptanceHistTitle1D(tgt, p, v, conf+trig)]->Scale(1./maxi);
         }
     }
-            }//chklist
-        }//iv
-    }//particle
-    //ctau hists
     for(auto ev:EventVars){
-        double maxi = 0;
-        key = EventTitle(tgt, ev, "Gen" + trig);
-        maxi = hMap[key]->GetMaximum();
-        if(maxi == 0 ){
-            cout<<"Warning! Empty histogram for "<<key<<endl;
-            maxi = 1;
-            //Null results shuld also be recorded. 
-        }
-        key = EventTitle(tgt, ev, "XiAcpt"+trig);
-        hMap[key]->Scale(1./maxi);
-        hMap[key]->SetLineColor(kBlue);
-        key = EventTitle(tgt, ev, "XiRecAcpt"+trig);
-        hMap[key]->Scale(1./maxi);
-        hMap[key]->SetLineColor(kGreen+2);
-        key = EventTitle(tgt, ev, "XiAcptCor"+trig);
-        hMap[key]->Scale(1./maxi);
-        hMap[key]->SetLineColor(kRed);
-        hMap[key]->SetMarkerColor(kRed);
-        hMap[key]->SetMarkerStyle(20);
-        key = EventTitle(tgt, ev, "XiRecAcptCor"+trig);
-        hMap[key]->Scale(1./maxi);
-        hMap[key]->SetLineColor(kOrange+7);
-        hMap[key]->SetMarkerColor(kOrange+7);
-        hMap[key]->SetMarkerStyle(20);
-        key = EventTitle(tgt, ev, "GoodXiAndScatPGoodCor"+trig);
-        hMap[key]->Scale(1./maxi);
-        hMap[key]->SetLineColor(kGreen+2);
-        hMap[key]->SetMarkerColor(kGreen+2);
-        hMap[key]->SetMarkerStyle(20);
-        for(auto chk: CheckLists){
-            key = EventTitle(tgt, ev, chk);
-            hMap[key]->Scale(1./maxi);
-    for(auto cp:CorrPars){
-        TString num = cp.num;
-        if(num != chk) continue;
-        TString den = cp.den;
-        TString pc = cp.p_cor;
-        for(int iv1 = 0; iv1 < variable.size();++iv1){
-            auto v1 = variable[iv1];
-            key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1);
-            hMap[key]->Scale(1./maxi);
-            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
-                auto v2 = variable[iv2];
-                key = CorrectedEventTitle(tgt, ev, chk, pc, num, den, v1, v2);
-                hMap[key]->Scale(1./maxi);
+        double maxi = hMap[EventTitle(tgt, ev, "Gen"+trig)]->GetMaximum();
+        if(maxi <= 0) maxi = 1;
+        for(auto chk:CheckLists){
+            hMap[EventTitle(tgt, ev, chk)]->Scale(1./maxi);
+            for(auto cp:CorrPars){
+                if(cp.num != chk) continue;
+                for(auto vars:CorrectionVariables(cp.p_cor))
+                    hMap[CorrectedEventTitle(tgt, ev, chk, cp.p_cor, cp.num, cp.den, vars[0], vars[1])]->Scale(1./maxi);
             }
         }
+        for(auto conf:FinalXiPChecks()) hMap[EventTitle(tgt, ev, conf+trig)]->Scale(1./maxi);
     }
-        }//chklist
-    }//ev
-
+    vector<TString> styles = {"XiPflag", "XiPflagCor", "XiPflagRec", "XiPflagRecCor",
+                             "GoodXiAndScatPGood", "GoodXiAndScatPGoodCor", "GoodXiAndScatPGoodRec", "GoodXiAndScatPGoodRecCor"};
+    vector<int> colors = {kBlue, kRed, kBlue, kOrange+7, kGreen+2, kGreen+2, kViolet, kViolet};
+    for(int i=0;i<styles.size();++i){
+        for(auto p:particle){
+            for(auto v:variable){
+                TString key = AcceptanceHistTitle1D(tgt, p, v, styles[i]+trig);
+                hMap[key]->SetLineColor(colors[i]); hMap[key]->SetMarkerColor(colors[i]); hMap[key]->SetMarkerStyle(20+i%3);
+            }
+        }
+        for(auto ev:EventVars){
+            TString key = EventTitle(tgt, ev, styles[i]+trig);
+            hMap[key]->SetLineColor(colors[i]); hMap[key]->SetMarkerColor(colors[i]); hMap[key]->SetMarkerStyle(20+i%3);
+        }
+    }
+}
+void SetFinalXiPPlotRange(TH1* reference, TString base){
+    // Include corrected yields and their weight errors, including mis-reconstructed candidates.
+    double maximum = 0.;
+    vector<TString> shown = {"Gen", "GoodXiAndScatPGood", "GoodXiAndScatPGoodCor"};
+#if DrawGeneValue
+    shown.push_back("XiPflag"); shown.push_back("XiPflagCor");
+#endif
+#if DrawResSmeared
+    shown.push_back("XiPflagRec"); shown.push_back("XiPflagRecCor");
+#endif
+    for(auto conf:shown){
+        TH1* hist = hMap[base+conf+trig];
+        for(int bin=1;bin<=hist->GetNbinsX();++bin)
+            maximum = max(maximum, hist->GetBinContent(bin)+hist->GetBinError(bin));
+    }
+    reference->GetYaxis()->SetRangeUser(0, maximum > 0 ? 1.2*maximum : 1.);
 }
 TGraphErrors* MakeDivisionGraph(TH1* h1, TH1* h2){
     TGraphErrors* g = new TGraphErrors();
@@ -953,8 +848,7 @@ TGraphErrors* MakeDivisionGraph(TH1* h1, TH1* h2){
         double err2 = h2->GetBinError(i);
         if(y2 == 0) continue;
         double y = y1 / y2;
-        double err = y * sqrt(pow(err1/y1, 2) + pow(err2/y2, 2));
-        if(y1 == 0) err = 0;
+        double err = hypot(err1/y2, y1*err2/(y2*y2));
         g->SetPoint(g->GetN(), x, y);
         g->SetPointError(g->GetN()-1, 0, err);
     }
@@ -967,115 +861,69 @@ TGraphErrors* MakeDivisionGraph(TH1* h1, TH1* h2){
     return g;
 }
 
-double CalcChi2(TH1* Gen, TH1* Cor, double trun = 0.0){
-    //260730->trun 0.2 -> 0.
-    //
-    double chi2 = 0;
-    int ent_eff = 0;
-    for(int i = 1; i <= Gen->GetNbinsX();++i){
-        double gen = Gen->GetBinContent(i);
-        if(gen == 0) continue;
-        ent_eff ++;
-    }
-    double den = Gen->GetEntries() / ent_eff;
-    vector<double> dels;
-    for(int i = 1; i <= Gen->GetNbinsX();++i){
-        double gen = Gen->GetBinContent(i);
-        double gen_err = Gen->GetBinError(i);
-        double cor = Cor->GetBinContent(i);
-        double cor_err = Cor->GetBinError(i);
-        double err = hypot(gen_err, cor_err);
-        dels.push_back(abs(gen - cor));
-        //dels.push_back((gen - cor)/err);
-    }
-    std::sort(dels.begin(), dels.end());
-    int n = dels.size();
-    int nc = 0;
-    for(int i = n*trun; i < n ;++i){
-        chi2 += pow(dels[i], 2);
-        nc ++;
-    }
-    return chi2/nc;
+// D^2: absolute count differences, averaged over ordinary bins; no error weighting.
+double CalcPenalty(TH1* Gen, TH1* Cor, double trun = 0.){
+    vector<double> differences;
+    for(int i=1;i<=Gen->GetNbinsX();++i) differences.push_back(abs(Gen->GetBinContent(i)-Cor->GetBinContent(i)));
+    sort(differences.begin(), differences.end());
+    double penalty = 0.;
+    int first = int(differences.size()*trun), count = 0;
+    for(int i=first;i<differences.size();++i){ penalty += differences[i]*differences[i]; ++count; }
+    return count > 0 ? penalty/count : numeric_limits<double>::infinity();
 }
-
-double CalcChi2(TString tgt, TString num, TString den, TString part_cor, TString v1, TString v2 = ""){
-    double chi2 = 0;
-    TString key_num, key_den, key_cor;
+double CalcPenalty(TString tgt, TString num, TString den, TString part_cor, TString v1, TString v2 = ""){
+    double penalty = 0.;
     for(auto p:particle){
         for(auto v:variable){
-            if(p == "P" or p == "Pi1" or p == "Pi2"){
-                if(v == "CosOpen") continue;
-            }
-            key_den = AcceptanceHistTitle1D(tgt, p, v, den);
-            key_cor = CorrectionHists(tgt, p, v, num, part_cor, num, den, v1, v2);
-            chi2 += CalcChi2(hMap[key_den], hMap[key_cor]);
+            if(v == "CosOpen" and (p == "P" or p == "Pi1" or p == "Pi2")) continue;
+            TString reference = AcceptanceHistTitle1D(tgt, p, v, den);
+            TString corrected = CorrectionHists(tgt, p, v, num, part_cor, num, den, v1, v2);
+            penalty += CalcPenalty(hMap[reference], hMap[corrected]);
         }
     }
-    return chi2;
+    return penalty;
 }
-
-
-
+// Retain the original helper name for macro compatibility. This is not statistical chi-square.
+double CalcChi2(TH1* Gen, TH1* Cor, double trun = 0.){ return CalcPenalty(Gen, Cor, trun); }
+double CalcChi2(TString tgt, TString num, TString den, TString part_cor, TString v1, TString v2 = ""){
+    return CalcPenalty(tgt, num, den, part_cor, v1, v2);
+}
 struct Chi2Map{
-    TString num, den;
-    TString part_cor;
+    TString num, den, part_cor;
     map<vector<TString>, double> cor_chi2;
-    //{{{v1, v2}, chi2}}
 };
 vector<Chi2Map> chi2Maps;
 vector<Chi2Map> chi2Maps_best;
-// map< {Particle, Particle_c,  num, den} , map<Corrections, chi2>>
-// Corrections = {var1, var2}
 void MakeChi2Map(TString tgt){
-    TString key_num, key_den, key_cor;
-    TString num, den;
-    TString part;
-    TString part_cor;
-    TString vc_1, vc_2;
-    for(int ic = 0; ic < CorrPars.size(); ++ic){
-        map<vector<TString>, double> cor_chi2;
-        auto cor = CorrPars[ic];
-        num = cor.num;
-        den = cor.den;
-        part_cor = cor.p_cor;
-        for(int iv1 = 0; iv1 < variable.size();++iv1){
-            auto v1 = variable[iv1];
-            if(v1 == "DistT") continue;
-            if(part_cor == "P" or part_cor == "Pi1" or part_cor == "Pi2"){
-                if(v1 == "CosOpen") continue;
-            }
-            cor_chi2[{v1,""}] = CalcChi2(tgt, num, den, part_cor, v1);
-            cout<<"chi2 for "<<part_cor<<" "<<num<<"/"<<den<<" with var "<<v1<<" is "<<cor_chi2[{v1,""}]<<endl;
-            for(int iv2 = iv1+1; iv2 < variable.size();++iv2){
-                auto v2 = variable[iv2];
-                if(v2 == "DistT") continue;
-                if(part_cor == "P" or part_cor == "Pi1" or part_cor == "Pi2"){
-                    if(v2 == "CosOpen") continue;
-                }
-                cor_chi2[{v1, v2}] = CalcChi2(tgt, num, den, part_cor, v1, v2);
-                cout<<"chi2 for "<<part_cor<<" "<<num<<"/"<<den<<" with var "<<v1<<" and "<<v2<<" is "<<cor_chi2[{v1, v2}]<<endl;
-            }
+    chi2Maps.clear(); chi2Maps_best.clear();
+    gSystem->mkdir(figdir_base, true);
+    ofstream scores((figdir_base+"PenaltyScores.tsv").Data());
+    ofstream best((figdir_base+"BestCorrections.tsv").Data());
+    if(!scores or !best) throw runtime_error("Cannot write correction scores in figure directory.");
+    scores << "num\tden\tparticle\tvar1\tvar2\tpenalty\tusable\trejected\n" << setprecision(17);
+    best << "num\tden\tparticle\tvar1\tvar2\tpenalty\n" << setprecision(17);
+    for(auto cp:CorrPars){
+        map<vector<TString>, double> penalties;
+        for(auto vars:CorrectionVariables(cp.p_cor)){
+            TString stats = "WeightCheck"+Correction(cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+            double usable = hMap[stats]->GetBinContent(1), rejected = hMap[stats]->GetBinContent(2);
+            double penalty = usable > 0 ? CalcPenalty(tgt, cp.num, cp.den, cp.p_cor, vars[0], vars[1]) : numeric_limits<double>::infinity();
+            penalties[vars] = penalty;
+            scores << cp.num << '\t' << cp.den << '\t' << cp.p_cor << '\t' << vars[0] << '\t'
+                   << (vars[1] == "" ? TString("-") : vars[1]) << '\t' << penalty << '\t' << usable << '\t' << rejected << '\n';
         }
-        Chi2Map chi2map = {num, den, part_cor, cor_chi2};
-        chi2Maps.push_back(chi2map);
-        double chi2_min = -1;
-        vector<TString> best_var;
-        map<vector<TString>, double> cor_chi2_best;
-        for(auto& [var, chi2]: cor_chi2){
-            if(chi2_min < 0){
-                chi2_min = chi2;
-                best_var = var;
-            }
-            if(chi2 < chi2_min){
-                chi2_min = chi2;
-                best_var = var;
-            }
+        chi2Maps.push_back({cp.num, cp.den, cp.p_cor, penalties});
+        double minimum = numeric_limits<double>::infinity();
+        vector<TString> selected = penalties.begin()->first;
+        for(auto result:penalties){
+            if(result.second < minimum){ minimum = result.second; selected = result.first; }
         }
-        cor_chi2_best[best_var] = chi2_min;
-        Chi2Map chi2map_best = {num, den, part_cor, cor_chi2_best};
-        chi2Maps_best.push_back(chi2map_best);
-        cout<<"Best chi2 for "<<part_cor<<" "<<num<<"/"<<den<<" is "<<chi2_min<<" with var "<<best_var[0]<<" "<<best_var[1]<<endl;
+        chi2Maps_best.push_back({cp.num, cp.den, cp.p_cor, {{selected, minimum}}});
+        best << cp.num << '\t' << cp.den << '\t' << cp.p_cor << '\t' << selected[0] << '\t'
+             << (selected[1] == "" ? TString("-") : selected[1]) << '\t' << minimum << '\n';
+        cout << "Best D^2 for " << cp.p_cor << ' ' << cp.num << '/' << cp.den << ": " << minimum
+             << " with " << selected[0] << ' ' << selected[1] << endl;
     }
 }
 
-void CheckAcceptance(vector<TFile*> files);
+void CheckAcceptance(vector<TFile*> files, bool make_figures = true);

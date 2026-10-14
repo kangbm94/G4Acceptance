@@ -1,6 +1,9 @@
-#ifndef XiEfficiency_hh
-#define XiEfficiency_hh
+#ifndef XiPScatEfficiency_hh
+#define XiPScatEfficiency_hh
 #include "Dir.hh"
+#include <stdexcept>
+#include <limits>
+using namespace std;
 #if date <= 260521
 vector<double> VertDistances = {0, 15, 30, 45, 60, 90, 120, 150, 250, 400};
 #elif date <= 260608
@@ -8,13 +11,20 @@ vector<double> VertDistances = {0, 14, 23, 33, 42, 52, 61, 71, 80, 90, 99, 110, 
 #else
 vector<double> VertDistances = {0, 23, 42, 61, 80, 99, 120, 145, 171, 196, 222, 250, 400};
 #endif
+double GetXiPVariable(TVector3 P1, TVector3 P2, TVector3 V, TString part, TString var){
+  if(part == "ScatP" and var == "CosOpen"){
+    if(P1.Mag2() == 0 or P2.Mag2() == 0) return numeric_limits<double>::quiet_NaN();
+    return cos(P1.Angle(P2)); // Outgoing proton-Xi opening angle at their common origin.
+  }
+  return GetVariable(P1, P2, V, var);
+}
 vector<TString> particle = {"P", "Pi1", "Pi2" , "L", "Xi", "ScatP"};
 vector<TString> variable = {"CosTh", "Mom", "Ph", "DistT", "CosPsi", "CosOpen"};
 vector<TString> suffix = {"Gen",
    "LAcpt", "GoodL", "GoodXi",
     "XiAcpt", "PTracked", "Pi1Tracked", "Pi2Tracked",
     "PPi1Tracked","AllTracked", "GoodLAndPi2Tracked",
-    "ScatPTracked", "ScatPGood", "GoodXiAndScatPTracked", "GoodXiAndScatPGood"
+    "ScatPTracked", "ScatPGood", "GoodXiAndScatPTracked", "GoodXiAndScatPGood", "XiPflag"
 };
 map<TString, TString> Labels =
 {
@@ -32,7 +42,14 @@ map<TString, TString> Labels =
   {"ScatPTracked", "Reconstructed scattered proton tracks"},
   {"ScatPGood", "Reconstructed good scattered proton tracks"},
   {"GoodXiAndScatPTracked", "Reconstructed #Xi and scattered proton tracks"},
-  {"GoodXiAndScatPGood", "Reconstructed #Xi and good scattered proton tracks"}
+  {"GoodXiAndScatPGood", "MC-matched #Xi-p pairs"},
+  {"XiPflag", "Observed #Xi-p candidates"},
+  {"XiPflagCor", "Corrected candidates (MC)"},
+  {"XiPflagRec", "Observed #Xi-p candidates (reconstructed)"},
+  {"XiPflagRecCor", "Corrected candidates (reco)"},
+  {"GoodXiAndScatPGoodCor", "Corrected matched pairs"},
+  {"GoodXiAndScatPGoodRec", "Matched pairs (reco)"},
+  {"GoodXiAndScatPGoodRecCor", "Corrected Matched pairs (reco)"}
 };
 //vector<TString> triggers = {"", "TrigB"};
 vector<TString> triggers = {""};
@@ -74,7 +91,7 @@ TString EffTitle2D(TString pre, TString part, TString var1, TString var2, TStrin
 }
 double GetWeight(TVector3 P1, TVector3 P2, TVector3 V, TString tgt, TString particle, TString conf, TString v1, TString v2 = "", TVector3 VL = TVector3(0,0,0)){
     TString MapKey;
-    std::map<TString, TEfficiency*>::iterator Eff;
+    map<TString, TEfficiency*>::iterator Eff;
     if(v2 == ""){
         MapKey = AcceptanceHistTitle1D(tgt, particle, v1, conf);
         Eff = effMap.find(MapKey);
@@ -106,10 +123,10 @@ double GetWeight(TVector3 P1, TVector3 P2, TVector3 V, TString tgt, TString part
             exit(EXIT_FAILURE);
         }
     } 
-    double x = GetVariable(P1, P2, V, v1);
+    double x = GetXiPVariable(P1, P2, V, particle, v1);
     double eff;
     if (v2 != ""){
-        double y = GetVariable(P1, P2, V, v2);
+        double y = GetXiPVariable(P1, P2, V, particle, v2);
         eff = Eff->second->GetEfficiency(Eff->second->FindFixBin(x, y));
     }
     else{
@@ -118,6 +135,15 @@ double GetWeight(TVector3 P1, TVector3 P2, TVector3 V, TString tgt, TString part
     return 1. / eff;
 }
 
+void LoadXiPScatEfficiency(TFile* file, TString key, TString mapkey){
+    if(file == nullptr or file->IsZombie()) throw runtime_error("Cannot read Xi-p efficiency file.");
+    TEfficiency* eff = dynamic_cast<TEfficiency*>(file->Get(key));
+    if(eff == nullptr) throw runtime_error(string("Missing efficiency: ") + key.Data());
+    auto old = effMap.find(mapkey);
+    if(old != effMap.end()) delete old->second;
+    effMap[mapkey] = (TEfficiency*)eff->Clone(mapkey);
+    effMap[mapkey]->SetDirectory(nullptr);
+}
 void LoadEff1D(TFile* file, TString tgt, TString Num, TString Den){
     TString key;
     for(auto p:particle){
@@ -128,12 +154,12 @@ void LoadEff1D(TFile* file, TString tgt, TString Num, TString Den){
             }
             key = EffTitle1D("G4", p, v, Num, Den);
             TString mapkey = EffTitle1D(tgt, p, v, Num, Den);
-            effMap[mapkey] = (TEfficiency*)file->Get(key);
+            LoadXiPScatEfficiency(file, key, mapkey);
             for(int id = 0; id < ndist-1;++id){
               if(v == "DistT" ) continue;
               key = EffTitle1D("G4", p, v, Num, Den) + GetDistKey(id);
               mapkey = EffTitle1D(tgt, p, v, Num, Den) + GetDistKey(id);
-              effMap[mapkey] = (TEfficiency*)file->Get(key);
+              LoadXiPScatEfficiency(file, key, mapkey);
             }
         }
     }
@@ -153,12 +179,12 @@ void LoadEff2D(TFile* file, TString tgt, TString Num, TString Den){
                 }
                 key = EffTitle2D("G4", p, v1, v2, Num, Den);
                 TString mapkey = EffTitle2D(tgt, p, v1, v2, Num, Den);
-                effMap[mapkey] = (TEfficiency*)file->Get(key);
+                LoadXiPScatEfficiency(file, key, mapkey);
                 for(int id = 0; id < ndist-1;++id){
                   if(v1 == "DistT" or v2 == "DistT") continue;
                   key = EffTitle2D("G4", p, v1, v2, Num, Den) + GetDistKey(id);
                   mapkey = EffTitle2D(tgt, p, v1, v2, Num, Den) + GetDistKey(id);
-                  effMap[mapkey] = (TEfficiency*)file->Get(key);
+                  LoadXiPScatEfficiency(file, key, mapkey);
                 }
             }
         }
@@ -197,8 +223,8 @@ void MakeEff1D(TString Num, TString Den){
       #if Debug
         cout<<"Making Eff "<<key<<" over "<<key0<<endl;
       #endif
-      auto hGen = hMap[key0];
-      auto hSuff = hMap[key];
+      TH1* hGen = hMap[key0];
+      TH1* hSuff = hMap[key];
       if(hGen == nullptr){
         cout<<"Histogram "<<key0<<" not found!"<<endl;
       }
@@ -206,12 +232,15 @@ void MakeEff1D(TString Num, TString Den){
         cout<<"Histogram "<<key<<" not found!"<<endl;
       }
       key_eff = EffTitle1D("G4", p, v1, Num, Den);
+      if(!TEfficiency::CheckConsistency(*hSuff, *hGen))
+          throw runtime_error(string("Inconsistent efficiency: ") + key_eff.Data());
       effMap[key_eff] = new TEfficiency(*hSuff, *hGen);
+      effMap[key_eff]->SetDirectory(nullptr);
       effMap[key_eff]->SetNameTitle(key_eff, key_eff);
       for(int id = 0; id < ndist-1;++id){
         if(v1 == "DistT") continue;
-        auto hGen = hMap[key0 + GetDistKey(id)];
-        auto hSuff = hMap[key + GetDistKey(id)];
+        TH1* hGen = hMap[key0 + GetDistKey(id)];
+        TH1* hSuff = hMap[key + GetDistKey(id)];
         if(hGen == nullptr){
           cout<<"Histogram "<<key0 + GetDistKey(id)<<" not found!"<<endl;
         }
@@ -222,7 +251,10 @@ void MakeEff1D(TString Num, TString Den){
       cout<<"Making Eff "<<key + GetDistKey(id)<<" over "<<key0 + GetDistKey(id)<<endl;
     #endif
         key_eff = EffTitle1D("G4", p, v1, Num, Den) + GetDistKey(id);
-        effMap[key_eff] = new TEfficiency(*hSuff, *hGen);
+        if(!TEfficiency::CheckConsistency(*hSuff, *hGen))
+          throw runtime_error(string("Inconsistent efficiency: ") + key_eff.Data());
+      effMap[key_eff] = new TEfficiency(*hSuff, *hGen);
+      effMap[key_eff]->SetDirectory(nullptr);
         effMap[key_eff]->SetNameTitle(key_eff, key_eff);
       }
     }
@@ -240,8 +272,8 @@ void MakeEff2D(TString Num, TString Den){
       #if Debug
         cout<<"Making Eff "<<key<<" over "<<key0<<endl;
       #endif
-        auto hGen = hMap2D[key0];
-        auto hSuff = hMap2D[key];
+        TH1* hGen = hMap2D[key0];
+        TH1* hSuff = hMap2D[key];
         if(hGen == nullptr){
           cout<<"Histogram "<<key0<<" not found!"<<endl;
         }
@@ -249,12 +281,15 @@ void MakeEff2D(TString Num, TString Den){
           cout<<"Histogram "<<key<<" not found!"<<endl;
         }
         key_eff = EffTitle2D("G4", p, v1, v2, Num, Den);
-        effMap[key_eff] = new TEfficiency(*hSuff, *hGen);
+        if(!TEfficiency::CheckConsistency(*hSuff, *hGen))
+          throw runtime_error(string("Inconsistent efficiency: ") + key_eff.Data());
+      effMap[key_eff] = new TEfficiency(*hSuff, *hGen);
+      effMap[key_eff]->SetDirectory(nullptr);
         effMap[key_eff]->SetNameTitle(key_eff, key_eff);
         for(int id = 0; id < ndist-1;++id){
           if(v1 == "DistT" or v2 == "DistT") continue;
-          auto hGen = hMap2D[key0 + GetDistKey(id)];
-          auto hSuff = hMap2D[key + GetDistKey(id)];
+          TH1* hGen = hMap2D[key0 + GetDistKey(id)];
+          TH1* hSuff = hMap2D[key + GetDistKey(id)];
           if(hGen == nullptr){
             cout<<"Histogram "<<key0 + GetDistKey(id)<<" not found!"<<endl;
           }
@@ -265,7 +300,10 @@ void MakeEff2D(TString Num, TString Den){
         cout<<"Making Eff "<<key + GetDistKey(id)<<" over "<<key0 + GetDistKey(id)<<endl;
       #endif
           key_eff = EffTitle2D("G4", p, v1, v2, Num, Den) + GetDistKey(id);
-          effMap[key_eff] = new TEfficiency(*hSuff, *hGen);
+          if(!TEfficiency::CheckConsistency(*hSuff, *hGen))
+          throw runtime_error(string("Inconsistent efficiency: ") + key_eff.Data());
+      effMap[key_eff] = new TEfficiency(*hSuff, *hGen);
+      effMap[key_eff]->SetDirectory(nullptr);
           effMap[key_eff]->SetNameTitle(key_eff, key_eff);
         }
       }

@@ -1,232 +1,119 @@
 #define LooseBin 0
 #define Debug 0
-#define date 261001
+#define date 261006
 #define LVtxIsXi 1
 #define SavePDF 0
-#include "G4XiPScatAcceptance.hh"
 #define Recon 1
 #define CH2 0
 #define PosShift 1
+#include "G4XiPScatAcceptance.hh"
 gErrorIgnoreLevel = kWarning;
 TString WAcc,Target,Conf,LVtxConf,filename,file_dir,fout_dir,fout_name,figdir2d;
 gStyle -> SetOptStat(0);
 bool file_check = 1;
 void G4XiPScatAcceptance(){
-  LVtxConf = "_LVtxIsXi";
+  LVtxConf = LVtxIsXi ? "_LVtxIsXi" : "";
   WAcc = "_WB";
-#if CH2
-  file_dir = "rootfiles/Geant4CH2/6mmShift/wo_upstream_search/";
-  Conf = "CH26mmShift";
-	Target = "CH2";
-#else
-  file_dir = "rootfiles/Geant4Prod/XiPScat/";
   Conf = "ProdXiPScat6mmShift";
-	Target = "Carbon";
-#endif
-  fout_dir = "./Maps/";
-  fout_name = Form("%sXiPScat_Recon_P0_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date);
+  Target = "Carbon";
+  if(file_dir == "") file_dir = "rootfiles/Geant4Prod/XiPScat/";
+  if(fout_dir == "") fout_dir = "./Maps/";
+  if(!fout_dir.EndsWith("/")) fout_dir += "/";
+  fout_name = Form("%sXiPScat_Recon_P0_%s%s_6mmShifted_%d.root",Target.Data(),LVtxConf.Data(),WAcc.Data(),date);
 #if LooseBin
-  fout_name = fout_name.ReplaceAll(".root","_LooseBin.root");
-	figdir.ReplaceAll("Hists","Hists_LooseBin");
+  fout_name.ReplaceAll(".root", "_LooseBin.root");
 #endif
-	figdir2d = figdir + "2D/";
-  gSystem->mkdir(figdir,1);
-  gSystem->mkdir(figdir2d,1);
-  cout<<"=======Usage======"<<endl;
-  cout<<"G4XiPScatAcceptance(i,frac,ndiv) : Run the analysis for file index i, with fraction frac of ndiv parts"<<endl;
-  cout<<"G4MakeEfficiencies() : Make the efficiency maps from the histograms"<<endl;
+  figdir2d = figdir+"2D/";
+  gSystem->mkdir(fout_dir, true);
+  cout<<"G4XiPScatAcceptance(i,frac,ndiv): make worker histograms"<<endl;
+  cout<<"G4MakeEfficiencies(nfile,ndiv): merge workers and make maps (default 10,10)"<<endl;
+}
+TString XiPScatInputFile(int i){
+  TString name = Form("XiPScatReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root",i);
+  return file_dir + (file_dir.EndsWith("/") ? "" : "/") + name;
+}
+void WriteXiPScatMaps(bool include_histograms = false){
+  TFile* fileOut = TFile::Open(fout_dir+fout_name, "RECREATE");
+  if(fileOut == nullptr or fileOut->IsZombie()) throw runtime_error("Cannot create Xi-p map file.");
+  TNamed format("XiPScatMapFormat", "XiPScat_StandardXi_20261006");
+  fileOut->WriteTObject(&format);
+  if(include_histograms){
+    for(auto hist:hMap) fileOut->WriteTObject(hist.second);
+    for(auto hist:hMap2D) fileOut->WriteTObject(hist.second);
+  }
+  for(auto eff:effMap) fileOut->WriteTObject(eff.second);
+  fileOut->Write(); fileOut->Close(); delete fileOut;
+  cout<<"Efficiency maps written to "<<fout_dir+fout_name<<endl;
 }
 void G4XiPScatAcceptance(int i, int frac = 1, int ndiv = 1){
-  if(fout_dir == "") G4XiPScatAcceptance();
+  if(fout_dir == "" or fout_name == "" or Conf == "") G4XiPScatAcceptance();
+  if(ndiv < 1 or frac < 1 or frac > ndiv) throw runtime_error("Invalid worker fraction.");
+  filename = XiPScatInputFile(i);
+  if(!FileCheck(filename)) throw runtime_error(string("Cannot read input: ")+filename.Data());
+  ResetXiPScatHistograms();
   TChain* tree = new TChain("tpc");
-#if PosShift
-#if CH2
-  filename = Form("XiReconCH2_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
-#else
-  filename = Form("XiPScatReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_XiPScat.root",i);
-#endif
-#endif
-  cout<<"Loading "<<filename<<endl;
-  if(FileCheck(file_dir+filename) == 0){
-    cout<<"Error loading file "<<filename<<endl;
-    return;
-    file_check = 0;
-  }
-  if(tree -> Add(file_dir+filename) != 1){
-    cout<<"Error adding file "<<filename<<endl;
-    return;
-    file_check = 0;
-  }
+  tree->Add(filename);
   g4genfitcarbon* Xi = new g4genfitcarbon(tree);
   SetBranches(tree);
-	InitializeHistograms();
-	auto ent = tree->GetEntries();
-  int start = 0,last = ent;
-  if(ndiv != 1){
-    int part = (ent / ndiv);
-    start = part * (frac - 1);
-    last = part * frac;
-    if(frac == ndiv) last = ent;
-  }
-  for(auto i = start;i<last;i++){
-    if(i%1000==0) cout << i << endl;
-    Xi->GetEntry(i);
+  InitializeHistograms();
+  Long64_t ent = tree->GetEntries(), part = ent/ndiv;
+  Long64_t start = part*(frac-1), last = frac == ndiv ? ent : part*frac;
+  for(Long64_t entry=start;entry<last;++entry){
+    if(entry%1000 == 0) cout<<entry<<endl;
+    Xi->GetEntry(entry);
     FillHist(Xi);
   }
-  TFile* fileOut;
-  TString buf = fout_dir + Form("buf/%s/%d/",Conf.Data(),date);
-  gSystem->mkdir(buf,1);
-  TString file_parallel = fout_name;
-  file_parallel.ReplaceAll(".root",Form("_%d_%d_%d.root",i,frac,ndiv));
-  fileOut = new TFile(buf+file_parallel,"recreate");
-  fileOut->cd();
-  for(auto hist:hMap){
-    hist.second -> Write();
-  }
-  cout<<"1D hists done"<<endl;
-  for(auto hist:hMap2D){
-    hist.second -> Write();
-  }
-  cout<<"2D hists done"<<endl;
-  fileOut->Write();
-  fileOut->Close();
+  TString buf = fout_dir+Form("buf/%s/%d/",Conf.Data(),date);
+  gSystem->mkdir(buf, true);
+  TString output = fout_name;
+  output.ReplaceAll(".root", Form("_%d_%d_%d.root",i,frac,ndiv));
+  TFile* fileOut = TFile::Open(buf+output, "RECREATE");
+  if(fileOut == nullptr or fileOut->IsZombie()) throw runtime_error("Cannot create histogram worker file.");
+  TNamed format("XiPScatMapFormat", "XiPScat_StandardXi_20261006");
+  fileOut->WriteTObject(&format);
+  for(auto hist:hMap) fileOut->WriteTObject(hist.second);
+  for(auto hist:hMap2D) fileOut->WriteTObject(hist.second);
+  fileOut->Write(); fileOut->Close(); delete fileOut;
 }
 void G4MakeEfficiencies(vector<TString> files){
-  for(auto f:files){
-    TFile* file = new TFile(f);
+  if(fout_dir == "" or fout_name == "" or Conf == "") G4XiPScatAcceptance();
+  if(files.empty()) throw runtime_error("No histogram workers supplied.");
+  ResetXiPScatHistograms();
+  for(auto name:files){
+    TFile* file = TFile::Open(name);
     LoadHistograms(file);
+    file->Close(); delete file;
   }
   MakeEfficiencies();
-  TFile* fileOut;
-  fileOut = new TFile(fout_dir+fout_name,"recreate");
-  fileOut->cd();
-  for(auto eff:effMap){
-    eff.second -> Write();  
-  }
-  cout<<"All effs written to file "<< fout_name << endl;
-  fileOut->Write();
-  cout<<"All done. Closing file."<<endl;
-  fileOut->Close();
+  WriteXiPScatMaps();
 }
-void G4MakeEfficiencies(){
-  if(fout_dir == "") G4XiPScatAcceptance();
-  TString buf = fout_dir + Form("buf/%s/%d/",Conf.Data(),date);
-  gSystem->mkdir(buf,1);
-  TString file_parallel = fout_name;
-  int nfile = 10;
-  int ndiv = 10;
-  vector<TFile*> files;
+void G4MakeEfficiencies(int nfile = 10, int ndiv = 10){
+  if(fout_dir == "" or fout_name == "" or Conf == "") G4XiPScatAcceptance();
+  vector<TString> files;
+  TString buf = fout_dir+Form("buf/%s/%d/",Conf.Data(),date);
   for(int i=0;i<nfile;++i){
-    for(int frac = 1; frac <= ndiv; ++frac){
-      file_parallel = fout_name;
-      file_parallel.ReplaceAll(".root",Form("_%d_%d_%d.root",i,frac,ndiv));
-      TFile* file = new TFile(buf+file_parallel);
-      files.push_back(file);
+    for(int frac=1;frac<=ndiv;++frac){
+      TString name = fout_name;
+      name.ReplaceAll(".root", Form("_%d_%d_%d.root",i,frac,ndiv));
+      files.push_back(buf+name);
     }
   }
-  for(auto f:files){
-    LoadHistograms(f);
-  }
-  MakeEfficiencies();
-  TFile* fileOut;
-  fileOut = new TFile(fout_dir+fout_name,"recreate");
-  fileOut->cd();
-  for(auto eff:effMap){
-    eff.second -> Write();  
-  }
-  cout<<"All effs written to file "<< fout_name << endl;
-  fileOut->Write();
-  cout<<"All done. Closing file."<<endl;
-  fileOut->Close();
+  G4MakeEfficiencies(files);
 }
-void G4XiPScatAcceptanceAll(){
-//  double pxi = -0.3;
-  if(fout_dir == "") G4XiPScatAcceptance();
-  double pxi = 0;
-  int nfiles = 30;
+void G4MakeEfficiency(int nfile = 10, int ndiv = 10){ G4MakeEfficiencies(nfile, ndiv); }
+void G4XiPScatAcceptanceAll(int nfile = 10){
+  if(fout_dir == "" or fout_name == "" or Conf == "") G4XiPScatAcceptance();
+  ResetXiPScatHistograms();
   TChain* tree = new TChain("tpc");
-	for(int i=0;i<nfiles;++i){
-		filename = Form("XiRecon%s_P_E42_%d_GenfitCarbonGeant4Ver5.root",Conf.Data(),i);
-#if PosShift
-#if CH2
-		filename = Form("XiReconCH2_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
-#else
-		filename = Form("XiReconProd_P_0_%d_6mmShifted_GenfitCarbonGeant4Ver16_VtxFit.root",i);
-#endif
-#endif
-		cout<<"Loading "<<filename<<endl;
-    if(FileCheck(file_dir+filename) == 0){
-      file_check = 0;
-      continue;
-    }
-    if(tree -> Add(file_dir+filename) != 1){
-      cout<<"Error adding file "<<filename<<endl;
-      file_check = 0;
-    }
-	}
-  if(file_check == 0){
-    cout<<"Error loading files. Exiting..."<<endl;
-    return;
+  for(int i=0;i<nfile;++i){
+    TString name = XiPScatInputFile(i);
+    if(!FileCheck(name)) throw runtime_error(string("Cannot read input: ")+name.Data());
+    tree->Add(name);
   }
-//	double ent_proton = tree->GetEntries();
   g4genfitcarbon* Xi = new g4genfitcarbon(tree);
   SetBranches(tree);
-	InitializeHistograms();
-	auto ent_tot = tree->GetEntries();
-  #if Debug
-    ent_tot = 1000;
-  #endif
-  for(auto i = 0;i<ent_tot;i++){
-    if(i%1000==0) cout << i << endl;
-    Xi->GetEntry(i);
-    FillHist(Xi);
-  }
-
-  cout<<"Closing files..."<<endl;
-  cout<<"RunProceed. Making Eff Maps..."<<endl;
+  InitializeHistograms();
+  for(Long64_t entry=0;entry<tree->GetEntries();++entry){ Xi->GetEntry(entry); FillHist(Xi); }
   MakeEfficiencies();
-  cout<<"Maps made"<<endl;
-
-  int ic=0;
-  TFile* fileOut;
-  fileOut = new TFile(fout_dir+fout_name,"recreate");
-	pxi=0;
-  fileOut->cd();
-  for(auto hist:hMap){
-    TCanvas* c = new TCanvas(Form("c%d", ic), Form("c%d", ic), 800, 800);
-    hist.second -> Draw("col");
-    if(SavePDF) c -> SaveAs(figdir + hist.second -> GetName() + TString(".pdf"));
-    ic++;
-    hist.second -> Write();
-  }
-  cout<<"1D hists done"<<endl;
-  for(auto hist:hMap2D){
-    TCanvas* c = new TCanvas(Form("c%d", ic), Form("c%d", ic), 800, 800);
-    hist.second -> Draw("col");
-    TString fig2d = "2D/";
-    if(SavePDF) c -> SaveAs(figdir + fig2d + hist.second -> GetName() + TString(".pdf"));
-    ic++;
-    hist.second -> Write();
-  }
-  cout<<"2D hists done"<<endl;
-  for(auto eff:effMap){
-    TCanvas* c = new TCanvas(Form("c%d", ic), Form("c%d", ic), 800, 800);
-    TString fig2d = "2D/";
-    eff.second -> Draw("colz");
-    if(SavePDF){
-      if(eff.second -> GetDimension() == 1){
-        c -> SaveAs(figdir + eff.second -> GetName() + TString(".pdf"));
-      }
-      else{
-        c -> SaveAs(figdir + fig2d + eff.second -> GetName() + TString(".pdf"));
-      }
-    }
-    ic++;
-    eff.second -> Write();
-  }
-  cout<<"All hists and effs written to file "<< fout_name << endl;
-  fileOut->Write();
-  cout<<"All done. Closing file."<<endl;
-  fileOut->Close();
-  exit(0);
+  WriteXiPScatMaps(true);
 }
