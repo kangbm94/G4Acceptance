@@ -43,7 +43,7 @@ double ltarget_distcut = 25.;
 double GFltarget_ycut = 20.;
 
 bool XiPOfflineFlag(g4genfitcarbon* XiEv){
-  if(XiEv->XiPflag and XiEv->XipVtxDist < 5)
+  if(XiEv->XiPflag and XiEv->XipVtxDist < 5) 
     return true;
   return false;
 }
@@ -433,6 +433,7 @@ SetBranches(TTree* tree){
   tree->SetBranchStatus("XiResidualsMom_y",1);
   tree->SetBranchStatus("XiResidualsMom_z",1);
 
+  tree->SetBranchStatus("XipVtxScatPMom",1);
   tree->SetBranchStatus("XipVtxScatPMom_x",1);
   tree->SetBranchStatus("XipVtxScatPMom_y",1);
   tree->SetBranchStatus("XipVtxScatPMom_z",1);

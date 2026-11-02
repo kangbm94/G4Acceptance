@@ -663,8 +663,8 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
     Event event(gf, tgt);
     if(!event.Good()) return;
     auto DC = event.GetDataContainer();
-    bool observed = gf->XiPflag;
-    bool matched = gf->xigood and gf->p_scat_good;
+    bool observed = XiPOfflineFlag(gf);
+    bool matched = gf->xigood and gf->p_scat_good and XiPOfflineFlag(gf);
     // References and uncorrected samples are independent of weight support or rejection.
     for(auto chk:CheckLists){
         if(!SuffixCheck(chk, gf) or !TrigCheck(trig, gf)) continue;
