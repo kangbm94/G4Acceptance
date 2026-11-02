@@ -89,7 +89,7 @@ TString SetEventVarAxis(TString var, int &nbinx, double &minx, double &maxx){
     return axis;
 }
 CorrPars = {
-    {"GoodXiAndScatPGood", "GoodXi", "ScatP", {"CosTh", "Mom"}},
+    {"GoodXiAndScatPGood", "GoodXi", "ScatP", {"Mom", "CosPsi"}},
     {"GoodXi", "GoodLAndPi2Tracked", "Xi", {"CosTh","CosOpen"}},
     {"GoodLAndPi2Tracked", "GoodL", "Pi2", {"Mom", "CosPsi"}},
     {"GoodL", "PPi1Tracked", "L", {"CosTh", "Mom"}},

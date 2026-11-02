@@ -5,7 +5,8 @@
 #define Recon 1
 #define CH2 0
 #define Debug 0
-#define date 261019
+//#define date 261019
+#define date 261102
 #define date_map 261019
 #define PosShift 1
 #define SecondaryCorr 0
@@ -14,7 +15,7 @@
 #define DrawResSmeared 1
 #endif
 #ifndef DrawGeneValue
-#define DrawGeneValue 0
+#define DrawGeneValue 1
 #endif
 #include "G4XiPScatAcceptanceCheck.hh"
 #include <TCanvas.h>
