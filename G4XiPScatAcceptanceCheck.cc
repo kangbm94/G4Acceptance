@@ -113,6 +113,138 @@ void G4XiPScatAcceptanceCheck(int i, int frac = 1, int ndiv = 1, TString best_fi
   gSystem->mkdir(bufdir, true);
   WriteXiPScatCheckWorker(Form("%sCorrectedHistograms_%d_%d_%d.root",bufdir.Data(),i,frac,ndiv));
 }
+void DrawWeightHistograms(TString tag, TString conf, TString figdir){
+  vector<vector<TString>> groups = {
+    {"h_weight", "h_weightRec", "hgood_weight", "hgood_weightRec", "hbad_weight", "hbad_weightRec"},
+    {"h_weightRatio", "hgood_weightRatio", "hbad_weightRatio"},
+    {"h_weightDiff", "hgood_weightDiff", "hbad_weightDiff"}
+  };
+  vector<TString> directories = {"Weights", "WeightRatio", "WeightDiff"};
+  vector<int> colors = {kBlack, kRed, kBlue, kGreen+2, kMagenta, kOrange+7};
+  for(int ig=0;ig<groups.size();++ig){
+    TString dir = figdir+directories[ig]+"/";
+    gSystem->mkdir(dir, true);
+    TString ct = "Canv_"+directories[ig]+"_"+conf;
+    TCanvas* c = new TCanvas(ct, ct, canv_size_x, canv_size_y);
+    c->SetLeftMargin(0.16);
+    TLegend* leg = new TLegend(0.55,0.65,0.95,0.94);
+    leg->SetTextSize(0.03);
+    leg->SetFillStyle(0);
+    leg->SetBorderSize(0);
+    double ymax = 1;
+    for(auto name:groups[ig]) ymax = max(ymax, hMap[name+tag]->GetMaximum());
+    for(int iw=0;iw<groups[ig].size();++iw){
+      TString name = groups[ig][iw];
+      TH1* h = hMap[name+tag]->DrawCopy(iw == 0 ? "hist" : "hist same");
+      h->SetStats(false);
+      h->SetLineColor(colors[iw]);
+      h->GetXaxis()->SetTitleSize(0.055); h->GetYaxis()->SetTitleSize(0.055);
+      h->GetXaxis()->SetLabelSize(0.045); h->GetYaxis()->SetLabelSize(0.045);
+      h->GetYaxis()->SetRangeUser(0, 1.5*ymax);
+      h->SetTitle(conf);
+      leg->AddEntry(h, name, "l");
+    }
+    leg->Draw();
+    c->SaveAs(dir+ct+".pdf");
+    delete c;
+    delete leg;
+  }
+}
+void DrawCandidateEventHistograms(TString tgt){
+  for(auto cp:CorrPars){
+    for(auto vars:CorrectionVariables(cp.p_cor)){
+      TString conf = cp.p_cor+cp.num+cp.den;
+      TString dir = figdir_base+"EventVars/Chi2/"+conf+"/";
+      gSystem->mkdir(dir, true);
+      // Six observables per page, including the candidate's closure ratio.
+      for(int first=0;first<EventVars.size();first+=6){
+        TString ct = Form("Canv_EventVars_%s_%s%s_%d", conf.Data(), vars[0].Data(), vars[1].Data(), first/6+1);
+        TCanvas* c = new TCanvas(ct, ct, canv_size_x, canv_size_y);
+        c->Divide(3,2,0.001,0.001);
+        vector<TGraphErrors*> graphs;
+        vector<TLegend*> legends;
+        for(int iv=first;iv<EventVars.size() and iv<first+6;++iv){
+          c->cd(iv-first+1);
+          TString ev = EventVars[iv];
+          TString denkey = EventTitle(tgt, ev, cp.den);
+          TString numkey = EventTitle(tgt, ev, cp.num);
+          TString corkey = CorrectedEventTitle(tgt, ev, cp.num, cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+          double ymax = max(1., max(hMap[denkey]->GetMaximum(), max(hMap[numkey]->GetMaximum(), hMap[corkey]->GetMaximum())));
+          TH1* h_den = hMap[denkey]->DrawCopy("hist");
+          h_den->SetStats(false);
+          h_den->SetLineColor(kBlack);
+          h_den->SetTitle(ev+": "+cp.p_cor+" "+vars[0]+(vars[1] == "" ? TString("") : ", "+vars[1]));
+          h_den->GetYaxis()->SetRangeUser(0, 1.5*ymax);
+          TH1* h_num = hMap[numkey]->DrawCopy("hist same");
+          h_num->SetStats(false);
+          h_num->SetLineColor(kBlue);
+          TH1* h_cor = hMap[corkey]->DrawCopy("hist same");
+          h_cor->SetStats(false);
+          h_cor->SetLineColor(kRed);
+          auto gr = MakeDivisionGraph(h_cor, h_den);
+          gr->Draw("PE same");
+          graphs.push_back(gr);
+          if(iv == first){
+            TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
+            leg->SetTextSize(0.03);
+            leg->SetFillStyle(0);
+            leg->SetBorderSize(0);
+            leg->AddEntry(h_den, Labels[cp.den], "l");
+            leg->AddEntry(h_num, Labels[cp.num], "l");
+            leg->AddEntry(h_cor, "Acceptance-corrected", "l");
+            leg->AddEntry(gr, "Closure Ratio", "pe");
+            leg->Draw();
+            legends.push_back(leg);
+          }
+        }
+        c->SaveAs(dir+ct+".pdf");
+        delete c;
+        for(auto gr:graphs) delete gr;
+        for(auto leg:legends) delete leg;
+      }
+    }
+  }
+}
+void DrawCorrectionDiagnostics(){
+  TString dir = figdir_base+"Weights/Checks/";
+  gSystem->mkdir(dir, true);
+  for(auto cp:CorrPars){
+    auto candidates = CorrectionVariables(cp.p_cor);
+    TString ct = "Canv_WeightCheck_"+cp.p_cor+cp.num+cp.den;
+    TCanvas* c = new TCanvas(ct, ct, canv_size_x, canv_size_y);
+    c->Divide(3, (candidates.size()+2)/3, 0.001, 0.001);
+    for(int iv=0;iv<candidates.size();++iv){
+      auto vars = candidates[iv];
+      c->cd(iv+1);
+      TString key = "WeightCheck"+Correction(cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+      TH1* h = hMap[key]->DrawCopy("hist text");
+      h->SetStats(false);
+      h->SetMarkerSize(1.5);
+      h->SetTitle(vars[0]+(vars[1] == "" ? TString("") : ", "+vars[1]));
+      h->GetXaxis()->SetTitle("");
+      h->GetXaxis()->SetBinLabel(1, "Usable");
+      h->GetXaxis()->SetBinLabel(2, "Rejected");
+      h->GetYaxis()->SetRangeUser(0, max(1., 1.3*h->GetMaximum()));
+    }
+    c->SaveAs(dir+ct+".pdf");
+    delete c;
+  }
+  TString ct = "Canv_FinalWeightChecks";
+  TCanvas* c = new TCanvas(ct, ct, canv_size_x, canv_size_y);
+  c->Divide(2,1);
+  c->cd(1);
+  TH1* h_final = hMap["h_final_weights"]->DrawCopy("hist text");
+  h_final->SetStats(false);
+  vector<TString> labels = {"Truth accepted", "Truth rejected", "Reco accepted", "Reco rejected"};
+  for(int i=0;i<labels.size();++i) h_final->GetXaxis()->SetBinLabel(i+1, labels[i]);
+  c->cd(2);
+  TH1* h_reco = hMap["h_reco_available"]->DrawCopy("hist text");
+  h_reco->SetStats(false);
+  h_reco->GetXaxis()->SetBinLabel(1, "Valid reco arrays");
+  h_reco->GetXaxis()->SetBinLabel(2, "Invalid reco arrays");
+  c->SaveAs(dir+ct+".pdf");
+  delete c;
+}
 void CheckAcceptance(vector<TFile*> files, bool make_figures){
   if(figdir_base == "") G4XiPScatAcceptanceCheck();
   SetStyle();
@@ -128,9 +260,16 @@ void CheckAcceptance(vector<TFile*> files, bool make_figures){
   if(files.empty()) throw runtime_error("No correction workers supplied.");
   InitializeTriggerCondtions();
   ResetXiPScatHistograms();
+  bool candidate_weights = HasCandidateWeightHistograms(files[0]);
+  for(auto file:files){
+    if(HasCandidateWeightHistograms(file) != candidate_weights)
+      throw runtime_error("Cannot merge workers with and without candidate weight histograms. Rerun all workers together.");
+  }
   for(auto file: files){
     LoadCorrectionHistograms(file, tgt);
   }
+  if(!candidate_weights)
+    cout<<"Older workers: drawing all candidate closure histograms. Rerun workers for candidate weight distributions."<<endl;
   MakeChi2Map(tgt);
   TFile* out_file = TFile::Open(figdir_base + "CorrectionResults.root", "RECREATE");
   if(out_file == nullptr or out_file->IsZombie()) throw runtime_error("Cannot create CorrectionResults.root.");
@@ -333,7 +472,6 @@ void CheckAcceptance(vector<TFile*> files, bool make_figures){
     c_corr_rat->SaveAs(figdir_rec + ct + ".pdf");
 
     //Chi2 Evaluation and correction comparison
-    vector<map<TString, double>> best_chi2_lists;
     for(int icm = 0; icm < chi2Maps_best.size();++icm){
       auto cp = chi2Maps_best[icm];
       double chi2 = cp.cor_chi2.begin()->second;
@@ -341,9 +479,6 @@ void CheckAcceptance(vector<TFile*> files, bool make_figures){
       TString num = cp.num;
       TString den = cp.den;
       TString conf = pc + num + den;
-      map<TString, double> best_chi2_map;
-      best_chi2_map[pc+num+den] = chi2;
-      best_chi2_lists.push_back(best_chi2_map);
       vector<TString> var_cor = cp.cor_chi2.begin()->first;
       TString v1 = var_cor[0];
       TString v2 = var_cor.size() > 1 ? var_cor[1] : "";
@@ -359,7 +494,8 @@ void CheckAcceptance(vector<TFile*> files, bool make_figures){
         TString key_num = AcceptanceHistTitle1D(tgt, p, v, num);
         TString key_cor = CorrectionHists(tgt, p, v, num, pc, num, den, v1, v2);
         TH1* h_den = (TH1*)hMap[key]->Clone();
-        h_den->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_den->GetMaximum()));
+        double ymax = max(h_den->GetMaximum(), max(hMap[key_num]->GetMaximum(), hMap[key_cor]->GetMaximum()));
+        h_den->GetYaxis()->SetRangeUser(0,max(1.5,1.5*ymax));
         h_den->SetLineColor(kBlack);
         h_den->Draw("hist");
         TH1* h_num = (TH1*)hMap[key_num]->Clone();
@@ -394,16 +530,6 @@ void CheckAcceptance(vector<TFile*> files, bool make_figures){
         double chi2 = c2.second;
         vector<TString> var_cor = c2.first;
         TString conf = pc + num + den;
-        bool skip = 0;
-        for(auto best_chi2_map: best_chi2_lists){
-          if(best_chi2_map.find(conf) != best_chi2_map.end()){
-            if(chi2 == best_chi2_map[conf]) {
-              skip = 1;
-              break;
-            }
-          }
-        }
-        if(skip) continue;
         TString v1 = var_cor[0];
         TString v2 = var_cor.size() > 1 ? var_cor[1] : "";
         ct = Form("Canv_%s_Chi2Corr_%s_over_%s_for_%s_%s%s", p.Data(), num.Data(), den.Data(), pc.Data(), v1.Data(), v2.Data());
@@ -419,7 +545,8 @@ void CheckAcceptance(vector<TFile*> files, bool make_figures){
           TString key_num = AcceptanceHistTitle1D(tgt, p, v, num);
           TString key_cor = CorrectionHists(tgt, p, v, num, pc, num, den, v1, v2);
           TH1* h_den = (TH1*)hMap[key]->Clone();
-          h_den->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_den->GetMaximum()));
+          double ymax = max(h_den->GetMaximum(), max(hMap[key_num]->GetMaximum(), hMap[key_cor]->GetMaximum()));
+          h_den->GetYaxis()->SetRangeUser(0,max(1.5,1.5*ymax));
           h_den->SetLineColor(kBlack);
           h_den->Draw("hist");
           TH1* h_num = (TH1*)hMap[key_num]->Clone();
@@ -667,75 +794,19 @@ void CheckAcceptance(vector<TFile*> files, bool make_figures){
     c_corr_rat->SaveAs(figdir_rec + ct + ".pdf");
   }//EventVar
 
+  DrawCandidateEventHistograms(tgt);
+  DrawCorrectionDiagnostics();
   TString weight_figdir = figdir_base+"Weights/";
-  gSystem->mkdir(weight_figdir, true);
-  vector<TString> weight_config = {"total"};
-  vector<TString> whist_config = {"h_weight", "h_weightRec", "hgood_weight", "hgood_weightRec","hbad_weight", "hbad_weightRec"};
-  vector<TString> wRathist_config = {"h_weightRatio",  "hgood_weightRatio","hbad_weightRatio"};
-  vector<TString> wDiffhist_config = {"h_weightDiff", "hgood_weightDiff","hbad_weightDiff"};
+  DrawWeightHistograms("", "total", weight_figdir);
   for(auto cp:CorrPars){
-    weight_config.push_back(cp.p_cor);
+    DrawWeightHistograms("_"+cp.p_cor, cp.p_cor, weight_figdir);
+    if(!candidate_weights) continue;
+    TString dir = weight_figdir+"Candidates/"+cp.p_cor+cp.num+cp.den+"/";
+    for(auto vars:CorrectionVariables(cp.p_cor)){
+      TString conf = cp.p_cor+"_"+vars[0]+vars[1];
+      DrawWeightHistograms(CandidateWeightTag(cp, vars[0], vars[1]), conf, dir);
+    }
   }
-  for(auto wconf: weight_config){
-    TString wconf_dir = weight_figdir + "/Weights/";
-    gSystem->mkdir(wconf_dir, true);
-    vector<int> whist_colors ={
-      kBlack, kRed, kBlue, kGreen+2, kMagenta, kOrange+7
-    };
-    TString ct = Form("Canv_Weights_%s", wconf.Data());
-    TCanvas* c_w = new TCanvas(ct, ct, canv_size_x, canv_size_y);
-    TString tag = wconf == "total" ? "" : "_"+wconf;
-    TLegend* leg = new TLegend(0.15,0.58,0.95,0.94);
-    leg->SetTextSize(0.03);
-    leg->SetFillStyle(0);
-    leg->SetBorderSize(0);
-    TLegend* leg_rat = new TLegend(0.15,0.58,0.95,0.94);
-    leg_rat->SetTextSize(0.03);
-    leg_rat->SetFillStyle(0);
-    leg_rat->SetBorderSize(0);
-    for(int iw = 0; iw < whist_config.size(); ++iw){
-      TString whist = whist_config[iw];
-      TString key = whist + tag;
-      TH1* h_w = (TH1*)hMap[key]->Clone();
-      h_w->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_w->GetMaximum()));
-      h_w->Draw("hist same");
-      h_w->SetLineColor(whist_colors[iw]);
-      leg->AddEntry(h_w, whist, "l");
-    }
-    leg->Draw();
-    c_w->SaveAs(wconf_dir + ct + ".pdf");
-    wconf_dir = weight_figdir + "/WeightRatio/";
-    gSystem->mkdir(wconf_dir, true);
-    ct = Form("Canv_WeightRatio_%s", wconf.Data());
-    TCanvas* c_wr = new TCanvas(ct, ct, canv_size_x, canv_size_y);
-    for(int iw = 0; iw < wRathist_config.size(); ++iw){
-      TString whist = wRathist_config[iw];
-      TString key = whist + tag;
-      TH1* h_w = (TH1*)hMap[key]->Clone();
-      leg_rat->AddEntry(h_w, whist, "l");
-      h_w->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_w->GetMaximum()));
-      h_w->Draw("hist same");
-      h_w->SetLineColor(whist_colors[iw]);
-    }
-    leg_rat->Draw();
-    c_wr->SaveAs(wconf_dir + ct + ".pdf");
-
-    wconf_dir = weight_figdir + "/WeightDiff/";
-    gSystem->mkdir(wconf_dir, true);
-    ct = Form("Canv_WeightDiff_%s", wconf.Data());
-    TCanvas* c_wd = new TCanvas(ct, ct, canv_size_x, canv_size_y);
-    for(int iw = 0; iw < wDiffhist_config.size(); ++iw){
-      TString whist = wDiffhist_config[iw];
-      TString key = whist + tag;
-      TH1* h_w = (TH1*)hMap[key]->Clone();
-      h_w->GetYaxis()->SetRangeUser(0,max(1.5,1.5*h_w->GetMaximum()));
-      h_w->Draw("hist same");
-      h_w->SetLineColor(whist_colors[iw]);
-    }
-    leg_rat->Draw();
-    c_wd->SaveAs(wconf_dir + ct + ".pdf");
-  }
-
 
   TDirectory* display = out_file->mkdir("NormalizedPlots");
   for(auto& [key, hist]: hMap){

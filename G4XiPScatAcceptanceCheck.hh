@@ -190,48 +190,44 @@ void BookCorrectionHistogram(TString key, TString title, int bins, double lo, do
     hMap[key]->Sumw2();
     hMap[key]->SetLineColor(color);
 }
+vector<TString> WeightHistogramNames(){
+    return {"h_weight", "h_weightRec", "h_weightRatio", "h_weightDiff",
+            "hgood_weight", "hgood_weightRec", "hgood_weightRatio", "hgood_weightDiff",
+            "hbad_weight", "hbad_weightRec", "hbad_weightRatio", "hbad_weightDiff"};
+}
+TString CandidateWeightTag(CorrectionParameter cp, TString v1, TString v2 = ""){
+    return "_" + Correction(cp.p_cor, cp.num, cp.den, v1, v2);
+}
+void BookWeightHistograms(TString tag, double maxweight){
+    for(TString prefix:{"h", "hgood", "hbad"}){
+        BookCorrectionHistogram(prefix+"_weight"+tag, ";Correction weight;Events", 1000, 0, maxweight);
+        BookCorrectionHistogram(prefix+"_weightRec"+tag, ";Correction weightRec;Events", 1000, 0, maxweight);
+        BookCorrectionHistogram(prefix+"_weightRatio"+tag, ";WeightRatio;Events", 1000, 0, 5);
+        BookCorrectionHistogram(prefix+"_weightDiff"+tag, ";Correction weightDiff;Events", 1000, -15, 15);
+    }
+}
+void FillWeightHistograms(TString tag, double weight, double weightRec, bool matched){
+    vector<TString> prefixes = {"h", matched ? "hgood" : "hbad"};
+    for(auto prefix:prefixes){
+        hMap[prefix+"_weight"+tag]->Fill(weight);
+        hMap[prefix+"_weightRec"+tag]->Fill(weightRec);
+        hMap[prefix+"_weightRatio"+tag]->Fill(weightRec/weight);
+        hMap[prefix+"_weightDiff"+tag]->Fill(weightRec-weight);
+    }
+}
+bool HasCandidateWeightHistograms(TFile* file){
+    if(file == nullptr or file->IsZombie()) throw runtime_error("Cannot read correction worker file.");
+    auto cp = CorrPars[0];
+    auto vars = CorrectionVariables(cp.p_cor)[0];
+    return file->Get("h_weight"+CandidateWeightTag(cp, vars[0], vars[1])) != nullptr;
+}
 void InitializeCorrectionHistograms(TString tgt){
     SetCorrectionCheckLists();
-    BookCorrectionHistogram("h_weight", ";Correction weight;Events", 1000, 0, 50);
-    BookCorrectionHistogram("h_weightRec", ";Correction weightRec;Events", 1000, 0, 50);
-    BookCorrectionHistogram("h_weightRatio", ";WeightRatio;Events", 1000, 0, 5);
-    BookCorrectionHistogram("h_weightDiff", ";Correction weightDiff;Events", 1000, -15, 15);
-    BookCorrectionHistogram("hgood_weight", ";Correction weight;Events", 1000, 0, 50);
-    BookCorrectionHistogram("hgood_weightRec", ";Correction weightRec;Events", 1000, 0, 50);
-    BookCorrectionHistogram("hgood_weightRatio", ";WeightRatio;Events", 1000, 0, 5);
-    BookCorrectionHistogram("hgood_weightDiff", ";Correction weightDiff;Events", 1000, -15, 15);
-    BookCorrectionHistogram("hbad_weight", ";Correction weight;Events", 1000, 0, 50);
-    BookCorrectionHistogram("hbad_weightRec", ";Correction weightRec;Events", 1000, 0, 50);
-    BookCorrectionHistogram("hbad_weightRatio", ";WeightRatio;Events", 1000, 0, 5);
-    BookCorrectionHistogram("hbad_weightDiff", ";Correction weightDiff;Events", 1000, -15, 15);
-
-    for(int ic = 0; ic < CorrPars.size(); ++ic){
-        auto cp = CorrPars[ic];
-        TString key = "h_weight_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";Correction weight;Events", 1000, 0, 5);
-        key = "h_weightRec_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";Correction weightRec;Events", 1000, 0, 5);
-        key = "hgood_weight_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";Correction weight;Events", 1000, 0, 5);
-        key = "hgood_weightRec_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";Correction weightRec;Events", 1000, 0, 5);
-        key = "hbad_weight_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";Correction weight;Events", 1000, 0, 5);
-        key = "hbad_weightRec_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";Correction weightRec;Events", 1000, 0, 5);
-
-        key = "h_weightRatio_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";WeightRatio;Events", 1000, 0, 5);
-        key = "h_weightDiff_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";Correction weightDiff;Events", 1000, -15, 15);
-        key = "hgood_weightRatio_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";WeightRatio;Events", 1000, 0, 5);
-        key = "hgood_weightDiff_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";Correction weightDiff;Events", 1000, -15, 15);
-        key = "hbad_weightRatio_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";WeightRatio;Events", 1000, 0, 5);
-        key = "hbad_weightDiff_" + cp.p_cor;
-        BookCorrectionHistogram(key, ";Correction weightDiff;Events", 1000, -15, 15);
+    BookWeightHistograms("", 50);
+    for(auto cp:CorrPars){
+        BookWeightHistograms("_"+cp.p_cor, 5);
+        for(auto vars:CorrectionVariables(cp.p_cor))
+            BookWeightHistograms(CandidateWeightTag(cp, vars[0], vars[1]), 5);
     }
     BookCorrectionHistogram("h_final_weights", ";Truth accepted/rejected, reco accepted/rejected;Events", 4, 0, 4);
     BookCorrectionHistogram("h_reco_available", ";XiPflag: valid/invalid reconstructed arrays;Events", 2, 0, 2);
@@ -302,31 +298,16 @@ void LoadCorrectionHistograms(TFile* file,TString tgt){
         "h_weightRatio", "h_weightDiff", 
         "hgood_weightRatio", "hgood_weightDiff", "hbad_weightRatio", "hbad_weightDiff"
         }) LoadOrAddHistogram(key, file);
+    bool candidate_weights = HasCandidateWeightHistograms(file);
     for(auto cp:CorrPars){
-        TString key = "h_weight_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "h_weightRec_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "hgood_weight_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "hgood_weightRec_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "hbad_weight_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "hbad_weightRec_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "h_weightRatio_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "h_weightDiff_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "hgood_weightRatio_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "hgood_weightDiff_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "hbad_weightRatio_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
-        key = "hbad_weightDiff_" + cp.p_cor;
-        LoadOrAddHistogram(key, file);
+        for(auto name:WeightHistogramNames()) LoadOrAddHistogram(name+"_"+cp.p_cor, file);
+        // Older workers still contain all candidate closure histograms, but no candidate weight distributions.
+        if(candidate_weights){
+            for(auto vars:CorrectionVariables(cp.p_cor)){
+                TString tag = CandidateWeightTag(cp, vars[0], vars[1]);
+                for(auto name:WeightHistogramNames()) LoadOrAddHistogram(name+tag, file);
+            }
+        }
     }
     for(auto cp:CorrPars){
         for(auto vars:CorrectionVariables(cp.p_cor))
@@ -707,57 +688,20 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
     for(auto cp:CorrPars){
         TString v1 = cp.var_cor[0], v2 = cp.var_cor.size()>1 ? cp.var_cor[1] : TString("");
         double w_step = event.GetWeight(cp.p_cor, cp.num, cp.den, v1, v2);
-        TString wkey = "h_weight_" + cp.p_cor;
-        hMap[wkey]->Fill(w_step);
         weight *= w_step;
         // Do not require truth matching or an MC-only proton-tracking flag for reconstructed candidates.
         double w_stepRec = event.GetWeightRec(cp.p_cor, cp.num, cp.den, v1, v2);
         weightRec *= w_stepRec;
-        wkey = "h_weightRec_" + cp.p_cor;
-        hMap[wkey]->Fill(w_stepRec);
-        wkey = "h_weightRatio_" + cp.p_cor;
-        hMap[wkey]->Fill(w_stepRec/w_step);
-        wkey = "h_weightDiff_" + cp.p_cor;
-        hMap[wkey]->Fill(w_stepRec-w_step);
-        if(matched){
-            wkey = "hgood_weight_" + cp.p_cor;
-            hMap[wkey]->Fill(w_step);
-            wkey = "hgood_weightRec_" + cp.p_cor;
-            hMap[wkey]->Fill(w_stepRec);
-           
-            wkey = "hgood_weightRatio_" + cp.p_cor;
-            hMap[wkey]->Fill(w_stepRec/w_step);
-            wkey = "hgood_weightDiff_" + cp.p_cor;
-            hMap[wkey]->Fill(w_stepRec-w_step);
-        }
-        else{
-            wkey = "hbad_weight_" + cp.p_cor;
-            hMap[wkey]->Fill(w_step);
-            wkey = "hbad_weightRec_" + cp.p_cor;
-            hMap[wkey]->Fill(w_stepRec);
-            
-            wkey = "hbad_weightRatio_" + cp.p_cor;
-            hMap[wkey]->Fill(w_stepRec/w_step);
-            wkey = "hbad_weightDiff_" + cp.p_cor;
-            hMap[wkey]->Fill(w_stepRec-w_step);
+        FillWeightHistograms("_"+cp.p_cor, w_step, w_stepRec, matched);
+        // Diagnostic weights for every candidate use the same XiPflag sample as the selected setting.
+        for(auto vars:CorrectionVariables(cp.p_cor)){
+            bool selected = vars[0] == v1 and vars[1] == v2;
+            double w = selected ? w_step : event.GetWeight(cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+            double wRec = selected ? w_stepRec : event.GetWeightRec(cp.p_cor, cp.num, cp.den, vars[0], vars[1]);
+            FillWeightHistograms(CandidateWeightTag(cp, vars[0], vars[1]), w, wRec, matched);
         }
     }
-    hMap["h_weight"]->Fill(weight);
-    hMap["h_weightRec"]->Fill(weightRec);
-    hMap["h_weightRatio"]->Fill(weightRec/weight);
-    hMap["h_weightDiff"]->Fill(weightRec-weight);
-    if(matched){
-        hMap["hgood_weight"]->Fill(weight);
-        hMap["hgood_weightRec"]->Fill(weightRec);
-        hMap["hgood_weightRatio"]->Fill(weightRec/weight);
-        hMap["hgood_weightDiff"]->Fill(weightRec-weight);
-    }
-    else{
-        hMap["hbad_weight"]->Fill(weight);
-        hMap["hbad_weightRec"]->Fill(weightRec);
-        hMap["hbad_weightRatio"]->Fill(weightRec/weight);
-        hMap["hbad_weightDiff"]->Fill(weightRec-weight);
-    }
+    FillWeightHistograms("", weight, weightRec, matched);
     if(GoodCorrectionWeight(weight)){
         hMap["h_final_weights"]->Fill(.5);
         if(observed){
