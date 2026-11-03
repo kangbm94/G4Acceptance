@@ -1,5 +1,6 @@
 #include "G4XiPScatAcceptance.hh"
 #include "TGraphErrors.h"
+#include "TH2D.h"
 #include <vector>
 #include <fstream>
 #include <sstream>
@@ -139,6 +140,71 @@ vector<vector<TString>> CorrectionVariables(TString part){
     }
     return vars;
 }
+vector<vector<TString>> CorrelationVariables(TString part){
+    vector<vector<TString>> pairs;
+    for(int i=0;i<variable.size();++i){
+        if(variable[i] == "CosOpen" and (part == "P" or part == "Pi1" or part == "Pi2")) continue;
+        for(int j=i+1;j<variable.size();++j){
+            if(variable[j] == "CosOpen" and (part == "P" or part == "Pi1" or part == "Pi2")) continue;
+            pairs.push_back({variable[i], variable[j]});
+        }
+    }
+    return pairs;
+}
+TString CorrelationHistTitle(TString tgt, TString part, TString v1, TString v2, TString conf){
+    return "Correlation" + AcceptanceHistTitle2D(tgt, part, v1, v2, conf);
+}
+vector<TString> CorrelationChecks(){
+    vector<TString> checks = CheckLists;
+    for(TString conf:{"XiPflag", "XiPflagRec", "GoodXiAndScatPGoodRec"}){
+        if(find(checks.begin(), checks.end(), conf+trig) == checks.end()) checks.push_back(conf+trig);
+    }
+    return checks;
+}
+void InitializeCorrelationHistograms(TString tgt){
+    for(auto chk:CorrelationChecks()){
+        for(auto p:particle){
+            for(auto vars:CorrelationVariables(p)){
+                int nx, ny;
+                double xmin, xmax, ymin, ymax;
+                TString xtitle = SetAxis(p, vars[0], nx, xmin, xmax);
+                TString ytitle = SetAxis(p, vars[1], ny, ymin, ymax);
+                TString key = CorrelationHistTitle(tgt, p, vars[0], vars[1], chk);
+                hMap2D[key] = new TH2D(key, chk+": "+p+";"+xtitle+";"+ytitle+";Events", nx, xmin, xmax, ny, ymin, ymax);
+                hMap2D[key]->SetDirectory(nullptr);
+                hMap2D[key]->Sumw2();
+            }
+        }
+    }
+}
+void FillCorrectionCorrelations(TString tgt, TString conf, const map<TString, vector<TVector3>> &DC){
+    for(auto p:particle){
+        auto values = DC.find(p);
+        if(values == DC.end() or values->second.size() < 3) throw runtime_error(string("Missing correlation kinematics: ")+p.Data());
+        auto data = values->second;
+        for(auto vars:CorrelationVariables(p)){
+            double x = GetXiPVariable(data[0], data[1], data[2], p, vars[0]);
+            double y = GetXiPVariable(data[0], data[1], data[2], p, vars[1]);
+            if(!isfinite(x) or !isfinite(y)) continue;
+            TString key = CorrelationHistTitle(tgt, p, vars[0], vars[1], conf);
+            TH1* hist = hMap2D[key];
+            ((TH2*)hist)->Fill(x, y); // Unit weight, independent of acceptance or weight rejection.
+        }
+    }
+}
+bool HasCorrelationHistograms(TFile* file, TString tgt){
+    if(file == nullptr or file->IsZombie()) throw runtime_error("Cannot read correction worker file.");
+    auto vars = CorrelationVariables(particle[0])[0];
+    return file->Get(CorrelationHistTitle(tgt, particle[0], vars[0], vars[1], CheckLists[0])) != nullptr;
+}
+void LoadCorrelationHistograms(TFile* file, TString tgt){
+    for(auto chk:CorrelationChecks()){
+        for(auto p:particle){
+            for(auto vars:CorrelationVariables(p))
+                LoadOrAdd2DHistogram(CorrelationHistTitle(tgt, p, vars[0], vars[1], chk), file);
+        }
+    }
+}
 void SetCorrectionCheckLists(){
     for(auto cp:CorrPars){
         if(find(CheckLists.begin(), CheckLists.end(), cp.num) == CheckLists.end()) CheckLists.push_back(cp.num);
@@ -223,6 +289,7 @@ bool HasCandidateWeightHistograms(TFile* file){
 }
 void InitializeCorrectionHistograms(TString tgt){
     SetCorrectionCheckLists();
+    InitializeCorrelationHistograms(tgt);
     BookWeightHistograms("", 50);
     for(auto cp:CorrPars){
         BookWeightHistograms("_"+cp.p_cor, 5);
@@ -339,6 +406,7 @@ void LoadCorrectionHistograms(TFile* file,TString tgt){
         }
         for(auto ev:EventVars) LoadOrAddHistogram(EventTitle(tgt, ev, conf+trig), file);
     }
+    if(HasCorrelationHistograms(file, tgt)) LoadCorrelationHistograms(file, tgt);
 }
 class Event{
     private:
@@ -649,6 +717,7 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
     // References and uncorrected samples are independent of weight support or rejection.
     for(auto chk:CheckLists){
         if(!SuffixCheck(chk, gf) or !TrigCheck(trig, gf)) continue;
+        FillCorrectionCorrelations(tgt, chk, DC);
         for(auto p:particle){
             for(auto v:variable)
                 FillCorrectionHistogram(AcceptanceHistTitle1D(tgt, p, v, chk), GetXiPVariable(DC[p][0], DC[p][1], DC[p][2], p, v));
@@ -657,10 +726,14 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
     }
     if(observed){
         FillFinalXiP(event, tgt, "XiPflag");
+        FillCorrectionCorrelations(tgt, "XiPflag"+trig, DC);
         hMap["h_reco_available"]->Fill(event.HasReconstruction() ? .5 : 1.5);
         if(event.HasReconstruction()){
             FillFinalXiP(event, tgt, "XiPflagRec", 1., true);
             if(matched) FillFinalXiP(event, tgt, "GoodXiAndScatPGoodRec", 1., true);
+            auto DCRec = event.GetDataContainerRec();
+            FillCorrectionCorrelations(tgt, "XiPflagRec"+trig, DCRec);
+            if(matched) FillCorrectionCorrelations(tgt, "GoodXiAndScatPGoodRec"+trig, DCRec);
         }
     }
     // Each candidate corrects its own numerator to its own denominator, as in XiAcceptanceCheck.

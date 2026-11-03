@@ -19,6 +19,7 @@
 #endif
 #include "G4XiPScatAcceptanceCheck.hh"
 #include <TCanvas.h>
+#include <TPad.h>
 TString WAcc,Target,Conf,LVtxConf,filename,figdir_base,file_dir, bufdir, fmap_dir,fmap_name;
 TString tgt = "Carbon";
 bool test_run = 0;
@@ -92,6 +93,7 @@ void WriteXiPScatCheckWorker(TString name){
   TNamed parameters("CorrectionParameters", CorrectionParameters().Data());
   out_file->WriteTObject(&parameters);
   for(auto hist:hMap) out_file->WriteTObject(hist.second);
+  for(auto hist:hMap2D) out_file->WriteTObject(hist.second);
   out_file->Write(); out_file->Close(); delete out_file;
 }
 void G4XiPScatAcceptanceCheck(int i, int frac = 1, int ndiv = 1, TString best_file = ""){
@@ -112,6 +114,75 @@ void G4XiPScatAcceptanceCheck(int i, int frac = 1, int ndiv = 1, TString best_fi
   }
   gSystem->mkdir(bufdir, true);
   WriteXiPScatCheckWorker(Form("%sCorrectedHistograms_%d_%d_%d.root",bufdir.Data(),i,frac,ndiv));
+}
+void DrawCorrelationHistogram(TString key, TString title, double maximum = 0.){
+  gPad->SetLeftMargin(0.13);
+  gPad->SetRightMargin(0.18);
+  gPad->SetBottomMargin(0.17);
+  TH1* hist = hMap2D[key]->DrawCopy("COLZ");
+  hist->SetStats(false);
+  hist->SetTitle(title);
+  hist->SetMinimum(0.);
+  if(maximum > 0) hist->SetMaximum(maximum);
+  hist->GetXaxis()->SetTitleSize(0.06); hist->GetYaxis()->SetTitleSize(0.06);
+  hist->GetXaxis()->SetLabelSize(0.05); hist->GetYaxis()->SetLabelSize(0.05);
+  hist->GetZaxis()->SetTitle("Events");
+  hist->GetZaxis()->SetTitleSize(0.05); hist->GetZaxis()->SetLabelSize(0.04);
+}
+void DrawCorrelationHistograms(TString tgt){
+  // All planes contain raw event counts; they are never acceptance weighted or normalized.
+  TString base = figdir_base+"Correlations/";
+  for(auto chk:CorrelationChecks()){
+    for(auto p:particle){
+      auto pairs = CorrelationVariables(p);
+      TString dir = base+chk+"/"+p+"/";
+      gSystem->mkdir(dir, true);
+      for(int first=0;first<pairs.size();first+=6){
+        TString ct = Form("Canv_Correlations_%s_%s_%d", p.Data(), chk.Data(), first/6+1);
+        TCanvas* c = new TCanvas(ct, ct, canv_size_x, canv_size_y);
+        c->Divide(3,2,0.001,0.001);
+        for(int i=first;i<pairs.size() and i<first+6;++i){
+          c->cd(i-first+1);
+          auto vars = pairs[i];
+          TString key = CorrelationHistTitle(tgt, p, vars[0], vars[1], chk);
+          DrawCorrelationHistogram(key, chk+": "+p+" "+vars[0]+" vs "+vars[1]);
+        }
+        c->SaveAs(dir+ct+".pdf");
+        delete c;
+      }
+    }
+  }
+  // Candidate settings share the unweighted numerator/denominator samples.
+  // For a one-variable correction, show that variable against every other valid variable.
+  for(auto cp:CorrPars){
+    TString conf = cp.p_cor+cp.num+cp.den;
+    TString dir = base+"Candidates/"+conf+"/";
+    gSystem->mkdir(dir, true);
+    for(auto vars:CorrectionVariables(cp.p_cor)){
+      vector<vector<TString>> pairs;
+      if(vars[1] != "") pairs.push_back(vars);
+      else{
+        for(auto pair:CorrelationVariables(cp.p_cor)){
+          if(pair[0] == vars[0] or pair[1] == vars[0]) pairs.push_back(pair);
+        }
+      }
+      TString ct = "Canv_Correlation_"+conf+"_"+vars[0]+vars[1];
+      TCanvas* c = new TCanvas(ct, ct, canv_size_x, max(500., 300.*pairs.size()));
+      c->Divide(2, pairs.size(), 0.001, 0.001);
+      for(int i=0;i<pairs.size();++i){
+        auto pair = pairs[i];
+        TString denkey = CorrelationHistTitle(tgt, cp.p_cor, pair[0], pair[1], cp.den);
+        TString numkey = CorrelationHistTitle(tgt, cp.p_cor, pair[0], pair[1], cp.num);
+        double maximum = max(hMap2D[denkey]->GetMaximum(), hMap2D[numkey]->GetMaximum());
+        c->cd(2*i+1);
+        DrawCorrelationHistogram(denkey, "Denominator: "+cp.den, maximum);
+        c->cd(2*i+2);
+        DrawCorrelationHistogram(numkey, "Numerator: "+cp.num, maximum);
+      }
+      c->SaveAs(dir+ct+".pdf");
+      delete c;
+    }
+  }
 }
 void DrawWeightHistograms(TString tag, TString conf, TString figdir){
   vector<vector<TString>> groups = {
@@ -261,21 +332,27 @@ void CheckAcceptance(vector<TFile*> files, bool make_figures){
   InitializeTriggerCondtions();
   ResetXiPScatHistograms();
   bool candidate_weights = HasCandidateWeightHistograms(files[0]);
+  bool correlations = HasCorrelationHistograms(files[0], tgt);
   for(auto file:files){
     if(HasCandidateWeightHistograms(file) != candidate_weights)
       throw runtime_error("Cannot merge workers with and without candidate weight histograms. Rerun all workers together.");
+    if(HasCorrelationHistograms(file, tgt) != correlations)
+      throw runtime_error("Cannot merge workers with and without correlation histograms. Rerun all workers together.");
   }
   for(auto file: files){
     LoadCorrectionHistograms(file, tgt);
   }
   if(!candidate_weights)
     cout<<"Older workers: drawing all candidate closure histograms. Rerun workers for candidate weight distributions."<<endl;
+  if(!correlations)
+    cout<<"Older workers: rerun workers to fill unweighted 2D correlation histograms."<<endl;
   MakeChi2Map(tgt);
   TFile* out_file = TFile::Open(figdir_base + "CorrectionResults.root", "RECREATE");
   if(out_file == nullptr or out_file->IsZombie()) throw runtime_error("Cannot create CorrectionResults.root.");
   TNamed parameters("CorrectionParameters", CorrectionParameters().Data());
   out_file->WriteTObject(&parameters);
   for(auto hist:hMap) out_file->WriteTObject(hist.second); // Original merged counts.
+  for(auto hist:hMap2D) out_file->WriteTObject(hist.second); // Unweighted 2D event counts.
   if(!make_figures){ out_file->Write(); out_file->Close(); delete out_file; return; }
   NormalizeHistograms(tgt);
   for(auto p:particle){
@@ -795,6 +872,7 @@ void CheckAcceptance(vector<TFile*> files, bool make_figures){
   }//EventVar
 
   DrawCandidateEventHistograms(tgt);
+  if(correlations) DrawCorrelationHistograms(tgt);
   DrawCorrectionDiagnostics();
   TString weight_figdir = figdir_base+"Weights/";
   DrawWeightHistograms("", "total", weight_figdir);
