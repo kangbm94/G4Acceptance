@@ -1,6 +1,7 @@
 #include "Include/g4genfitcarbon.h"
 #include "Include/XiEfficiency.hh"
 #include "Include/PolarizationAnal.hh"
+#include <TNamed.h>
 using namespace std;
 //#include "G4PolaBranches.hh"
 double thr_weight = 20; // cut under 5%
@@ -156,23 +157,70 @@ void InitializeHistograms(){
   }//suffix
   }//trigger
 }
+bool histogram_file_error = false;
+TString XiAcceptanceConfig(){
+#if LooseBin
+    int loose = 1;
+#else
+    int loose = 0;
+#endif
+    return Form("LVtxIsXi=%d;PosShift=%d;CH2=%d;LooseBin=%d", LVtxIsXi, PosShift, CH2, loose);
+}
+void WriteXiAcceptanceTag(TFile* file){
+    if(file == nullptr or file->IsZombie()){
+        cout<<"Error: Cannot write the Xi acceptance configuration tag."<<endl;
+        return;
+    }
+    TNamed tag("XiAcceptanceConfig", XiAcceptanceConfig().Data());
+    file->WriteObject(&tag, "XiAcceptanceConfig");
+}
+void CheckXiAcceptanceTag(TFile* file){
+    if(file == nullptr or file->IsZombie()){
+        cout<<"Error: Cannot read the Xi acceptance configuration tag."<<endl;
+        return;
+    }
+    auto tag = dynamic_cast<TNamed*>(file->Get("XiAcceptanceConfig"));
+    if(tag == nullptr){
+        cout<<"Error: XiAcceptanceConfig tag is missing in "<<file->GetName()<<". Continuing."<<endl;
+    }
+    else if(TString(tag->GetTitle()) != XiAcceptanceConfig()){
+        cout<<"Error: XiAcceptanceConfig tag mismatch in "<<file->GetName()<<". Continuing."<<endl;
+        cout<<"File: "<<tag->GetTitle()<<"; current: "<<XiAcceptanceConfig()<<endl;
+    }
+}
 void LoadOrAdd1DHistogram(TString key, TFile* file){
+    TH1* hist = file != nullptr and !file->IsZombie() ? dynamic_cast<TH1*>(file->Get(key)) : nullptr;
+    if(hist == nullptr){
+        cout<<"Error: Cannot load histogram "<<key<<endl;
+        histogram_file_error = true;
+        return;
+    }
     if(hMap.find(key) == hMap.end()){
-        hMap[key] = (TH1*)file->Get(key);
+        hMap[key] = (TH1*)hist->Clone(key);
+        hMap[key]->SetDirectory(nullptr);
     }
-    else{
-        hMap[key] ->Add((TH1*)file->Get(key));
-    }
+    else if(!hMap[key]->Add(hist)) histogram_file_error = true;
 }
 void LoadOrAdd2DHistogram(TString key, TFile* file){
+    TH2* hist = file != nullptr and !file->IsZombie() ? dynamic_cast<TH2*>(file->Get(key)) : nullptr;
+    if(hist == nullptr){
+        cout<<"Error: Cannot load histogram "<<key<<endl;
+        histogram_file_error = true;
+        return;
+    }
     if(hMap2D.find(key) == hMap2D.end()){
-        hMap2D[key] = (TH2*)file->Get(key);
+        hMap2D[key] = (TH2*)hist->Clone(key);
+        hMap2D[key]->SetDirectory(nullptr);
     }
-    else{
-        hMap2D[key] ->Add((TH2*)file->Get(key));
-    }
+    else if(!hMap2D[key]->Add(hist)) histogram_file_error = true;
 }
 void LoadHistograms(TFile* file){
+  if(file == nullptr or file->IsZombie()){
+    cout<<"Error: Cannot read Xi acceptance histograms."<<endl;
+    histogram_file_error = true;
+    return;
+  }
+  CheckXiAcceptanceTag(file);
   cout<<"Loading Histograms from "<<file->GetName()<<endl;
   for(auto t:triggers){
   for(auto s:suffix){

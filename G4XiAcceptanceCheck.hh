@@ -1,6 +1,7 @@
 #include "G4XiAcceptance.hh"
 #include "TGraphErrors.h"
 #include <vector>
+#include <limits>
 double weight_th = 100;
 int over_cnt = 0;
 TString trig = "";
@@ -160,6 +161,7 @@ map<TString, int> colorMap = {
 };
 void InitializeTriggerCondtions(){
 #if TrigB
+    if(trig == "TrigB") return;
     cout<<"Applying trigger bias correction..."<<endl;
     for(int ic=0;ic<CheckLists.size();++ic){
         CheckLists[ic] = CheckLists[ic] + "TrigB";
@@ -290,21 +292,45 @@ void InitializeCorrectionHistograms(TString tgt){
         hMap[key] = new TH1D(key, key + ";" + Xtitle, nbinx, minx, maxx);
     }
 };
-void LoadOrAddHistogram(TString key, TFile* file, TString chk = ""){
-    if(hMap.find(key) == hMap.end()){
-        hMap[key] = (TH1*)file->Get(key);
-        if(chk == ""){
-            cout<<"Warning: No CheckList specified for histogram "<<key<<"."<<endl;
-        }
-        else{
-            hMap[key] -> SetLineColor(colorMap[chk]);
-        }
+TString XiCorrectionConfig(){
+    TString tag = XiAcceptanceConfig() + Form(";date=%d;PerDist=%d;PerXiDist=%d;TrigB=%d;SecondaryCorr=%d;weight_th=%.17g",
+        date, PerDist, PerXiDist, TrigB, SecondaryCorr, weight_th);
+    for(auto cp:CorrPars){
+        tag += ";" + Correction(cp.p_cor, cp.num, cp.den, cp.var_cor[0], cp.var_cor.size() > 1 ? cp.var_cor[1] : TString(""));
     }
-    else{
-        hMap[key] ->Add((TH1*)file->Get(key));
+    return tag;
+}
+void WriteXiCorrectionTag(TFile* file){
+    WriteXiAcceptanceTag(file);
+    if(file == nullptr or file->IsZombie()) return;
+    TNamed tag("XiCorrectionConfig", XiCorrectionConfig().Data());
+    file->WriteObject(&tag, "XiCorrectionConfig");
+}
+void CheckXiCorrectionTag(TFile* file){
+    if(file == nullptr or file->IsZombie()){
+        cout<<"Error: Cannot read the Xi correction configuration tag."<<endl;
+        return;
+    }
+    auto tag = dynamic_cast<TNamed*>(file->Get("XiCorrectionConfig"));
+    if(tag == nullptr){
+        cout<<"Error: XiCorrectionConfig tag is missing in "<<file->GetName()<<". Continuing."<<endl;
+    }
+    else if(TString(tag->GetTitle()) != XiCorrectionConfig()){
+        cout<<"Error: XiCorrectionConfig tag mismatch in "<<file->GetName()<<". Continuing."<<endl;
+        cout<<"File: "<<tag->GetTitle()<<"; current: "<<XiCorrectionConfig()<<endl;
     }
 }
+void LoadOrAddHistogram(TString key, TFile* file, TString chk = ""){
+    LoadOrAdd1DHistogram(key, file);
+    if(chk != "" and hMap.find(key) != hMap.end()) hMap[key]->SetLineColor(colorMap[chk]);
+}
 void LoadCorrectionHistograms(TFile* file,TString tgt){
+    if(file == nullptr or file->IsZombie()){
+        cout<<"Error: Cannot read Xi correction histograms."<<endl;
+        histogram_file_error = true;
+        return;
+    }
+    CheckXiCorrectionTag(file);
     cout<<"Loading histograms from file: "<<file->GetName()<<endl;
     LoadOrAddHistogram("h_weight", file);
     for(auto cp:CorrPars){
@@ -395,6 +421,7 @@ class Event{
         map<TString, vector<TVector3>> DC;// DataContainer
         map<TString, vector<TVector3>> DCRec;// DataContainer
         TString tgt;
+        bool hasRec = false;
     public:
         Event(g4genfitcarbon* g, TString t): gf(g), tgt(t){
             P.SetXYZ(gf->G4pmom_x, gf->G4pmom_y, gf->G4pmom_z);
@@ -418,7 +445,9 @@ class Event{
                 #endif
                 {"Xi",{Xi,Pi2,VXi}},
             };
-            if(gf->Xiflag){
+            if(gf->Xiflag and gf->KFXiDecaysMom_x != nullptr and gf->KFXiDecaysMom_y != nullptr and gf->KFXiDecaysMom_z != nullptr
+                and gf->KFXiDecaysMom_x->size() >= 3 and gf->KFXiDecaysMom_y->size() >= 3 and gf->KFXiDecaysMom_z->size() >= 3){
+                hasRec = true;
                 PRec.SetXYZ(gf->KFXiDecaysMom_x->at(0), gf->KFXiDecaysMom_y->at(0), gf->KFXiDecaysMom_z->at(0));
                 Pi1Rec.SetXYZ(gf->KFXiDecaysMom_x->at(1), gf->KFXiDecaysMom_y->at(1), gf->KFXiDecaysMom_z->at(1));
                 Pi2Rec.SetXYZ(gf->KFXiDecaysMom_x->at(2), gf->KFXiDecaysMom_y->at(2), gf->KFXiDecaysMom_z->at(2));
@@ -429,6 +458,7 @@ class Event{
                 VXiProdRec.SetXYZ(gf->KFXiProductionVtx_x, gf->KFXiProductionVtx_y, gf->KFXiProductionVtx_z);
             }
             else{
+                if(gf->Xiflag) cout<<"Error: Xiflag event has missing or short KFXiDecaysMom arrays."<<endl;
                 PRec.SetXYZ(0,0,0);
                 Pi1Rec.SetXYZ(0,0,0);
                 Pi2Rec.SetXYZ(0,0,0);
@@ -450,6 +480,7 @@ class Event{
                 {"Xi",{XiRec,Pi2Rec,VXiRec}},
             };
         }
+        bool HasReconstruction(){ return hasRec; }
         map<TString, vector<TVector3>> GetDataContainer(){
             return DC;
         }
@@ -515,7 +546,7 @@ class Event{
             }
             else if(var == "ctau_Xi"){
                 double gb_Xi = Xi.Mag()/mXi;
-                val = (VL - VXi).Mag() / gb_Xi;
+                val = (VXi - VXiProd).Mag() / gb_Xi;
             }
             else if(var == "CThKK"){
                 TLorentzVector LVKM(Km, hypot(Km.Mag(), mk));
@@ -569,7 +600,7 @@ class Event{
             }
             else if(var == "ctau_Xi"){
                 double gb_Xi = XiRec.Mag()/mXi;
-                val = (VLRec - VXiRec).Mag() / gb_Xi;
+                val = (VXiRec - VXiProdRec).Mag() / gb_Xi;
             }
             else if(var == "CThKK"){
                 TLorentzVector LVKM(Km, hypot(Km.Mag(), mk));
@@ -625,6 +656,7 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
     double w;
     double weight = 1;
     double weightRec = 1;
+    if(gf->Xiflag and !event.HasReconstruction()) weightRec = numeric_limits<double>::quiet_NaN();
     for(auto cp:CorrPars){
         TString num = cp.num;
         TString den = cp.den;
@@ -633,7 +665,7 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
         TString v1 = var_cor[0];
         TString v2 = var_cor.size() > 1 ? var_cor[1] : "";
         weight *= event.GetWeight(pc, num, den, v1, v2);
-        if(gf->Xiflag){
+        if(event.HasReconstruction()){
             double w = event.GetWeightRec(pc, num, den, v1, v2);
             if(w > weight_th or isnan(w)){
                 double var1 = GetVariable(DCRec[pc][0], DCRec[pc][1], DCRec[pc][2], v1);
@@ -651,7 +683,7 @@ void FillHistograms(g4genfitcarbon* gf, TString tgt){
         cout<<Form("w = %g, wRec = %g, event count over threshold = %d", weight, weightRec, over_cnt)<<endl;
     }
 #if SecondaryCorr 
-    if(gf->Xiflag){
+    if(event.HasReconstruction()){
         for(auto ev:EventVars){
             for(auto sec:SecondaryCorrection){
                 TString sec_name = sec.first;
@@ -963,6 +995,8 @@ vector<Chi2Map> chi2Maps_best;
 // map< {Particle, Particle_c,  num, den} , map<Corrections, chi2>>
 // Corrections = {var1, var2}
 void MakeChi2Map(TString tgt){
+    chi2Maps.clear();
+    chi2Maps_best.clear();
     TString key_num, key_den, key_cor;
     TString num, den;
     TString part;

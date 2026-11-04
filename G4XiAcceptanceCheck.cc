@@ -64,6 +64,31 @@ void G4XiAcceptanceCheck(){
   cout<<"CheckAcceptanceAll() : Check the acceptance for all files"<<endl;
 }
 
+TFile* OpenXiAcceptanceFile(){
+#if CH2
+  TFile* acpt_file = nullptr;
+  #if LVtxIsXi
+    #if date >= 260817
+      acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260817));
+    #else
+      acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260729));
+    #endif
+  #else
+    acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
+  #endif
+#else
+  TFile* acpt_file = nullptr;
+  #if date < 260806
+    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260726));
+  #elif date >= 260817
+    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260817));
+  #else
+    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260806));
+  #endif
+#endif
+  return acpt_file;
+}
+
 void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
   if(file_dir == "") G4XiAcceptanceCheck();
   SetStyle();
@@ -79,28 +104,14 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
     return;
   }
   cout<<"Accpt file"<<endl;
-#if CH2
-  TFile* acpt_file;
-  #if LVtxIsXi
-    acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260729));
-    #if date >= 260817
-      acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260817));
-    #endif
-  #else
-    //acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
-  #endif
-#else
-  TFile* acpt_file;
-  #if date < 260806
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260726));
-  #elif date >= 260817
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260817));
-  #else
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260806));
-  #endif
-#endif
+  TFile* acpt_file = OpenXiAcceptanceFile();
+  if(acpt_file == nullptr or acpt_file->IsZombie()){
+    cout<<"Error: Cannot open the Xi acceptance map file."<<endl;
+    return;
+  }
   cout<<Form("Run %d, Target: %s, Date: %d", i,tgt.Data(), date)<<endl;
   cout<<"Map file :"<<acpt_file->GetName()<<endl;
+  CheckXiAcceptanceTag(acpt_file);
   InitializeTriggerCondtions();
   g4genfitcarbon* Xi = new g4genfitcarbon(tree);
   tree->Add(file_dir+filename);
@@ -124,6 +135,11 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
   gSystem->mkdir(figdir_base, true);
   gSystem->mkdir(bufdir, true);
   TFile* out_file = TFile::Open(Form("%sCorrectedHistograms_%d_%d_%d.root", bufdir.Data(), i, frac, ndiv), "RECREATE");
+  if(out_file == nullptr or out_file->IsZombie()){
+    cout<<"Error: Cannot create the Xi correction output file."<<endl;
+    return;
+  }
+  WriteXiCorrectionTag(out_file);
   out_file->cd("");
   for(auto& [key, hist]: hMap){
     hist->Write();
@@ -135,6 +151,7 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
 void CheckAcceptance(vector<TFile*> files){
   if(figdir_base == "") G4XiAcceptanceCheck();
   SetStyle();
+  TString figdir_base_saved = figdir_base;
   gStyle->SetTitleSize(tsize,"XY");
   gStyle->SetLabelSize(lsize,"XY");
   gStyle->SetTitleOffset(offset_x,"X");
@@ -144,12 +161,23 @@ void CheckAcceptance(vector<TFile*> files){
   gStyle->SetPadTopMargin(top_margin);
   gStyle->SetPadBottomMargin(bottom_margin);
   gROOT->ForceStyle();
+  histogram_file_error = false;
+  if(!files.empty()) hMap.clear();
   for(auto file: files){
     LoadCorrectionHistograms(file, tgt);
+  }
+  if(histogram_file_error){
+    cout<<"Error: Incomplete Xi correction input. Existing correction output was not overwritten."<<endl;
+    return;
   }
   MakeChi2Map(tgt);
   NormalizeHistograms(tgt);
   TFile* out_file = TFile::Open(figdir_base + "CorrectionResults.root", "RECREATE");
+  if(out_file == nullptr or out_file->IsZombie()){
+    cout<<"Error: Cannot create the Xi correction output file."<<endl;
+    return;
+  }
+  WriteXiCorrectionTag(out_file);
   for(auto p:particle){
     //Each step by gen
     TString figdir = figdir_base  + "/StepByGen/";
@@ -629,6 +657,7 @@ void CheckAcceptance(vector<TFile*> files){
   }
   out_file->Write();
   out_file->Close();
+  figdir_base = figdir_base_saved;
 }
 void CheckAcceptanceAll(){
   if(figdir_base == "") G4XiAcceptanceCheck();
@@ -653,7 +682,6 @@ void G4XiAcceptanceCheckAll(){
   SetStyle();
   double pxi = 0;
   int nfile = 30;
-  bool test_run = 0;
   if(test_run) nfile = 1;
   TChain* tree = new TChain("tpc");
   cout<<"Loading files..."<<endl;
@@ -685,22 +713,13 @@ void G4XiAcceptanceCheckAll(){
     return;
   }
   cout<<"Accpt file"<<endl;
-#if CH2
-  TFile* acpt_file;
-  #if LVtxIsXi
-    acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260729));
-  #else
-    acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
-  #endif
-#else
-  TFile* acpt_file;
-  #if LVtxIsXi
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260726));
-  #else
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0_WB_6mmShifted_%d.root",260726));
-  #endif
-#endif
+  TFile* acpt_file = OpenXiAcceptanceFile();
+  if(acpt_file == nullptr or acpt_file->IsZombie()){
+    cout<<"Error: Cannot open the Xi acceptance map file."<<endl;
+    return;
+  }
   cout<<Form("Run Target: %s, Date: %d", tgt.Data(), date)<<endl;
+  CheckXiAcceptanceTag(acpt_file);
   InitializeTriggerCondtions();
   g4genfitcarbon* Xi = new g4genfitcarbon(tree);
   SetBranches(tree);
@@ -737,13 +756,19 @@ void G4XiAcceptanceCheckAll(){
 #endif
   gSystem->mkdir(figdir_base, true);
   gSystem->mkdir(figdir_base + "rootfiles/", true);
+  gSystem->mkdir(bufdir + "rootfiles/", true);
   TFile* out_file = TFile::Open(bufdir + "rootfiles/AcceptanceCorrectionMaps.root", "RECREATE");
+  if(out_file == nullptr or out_file->IsZombie()){
+    cout<<"Error: Cannot create the Xi correction output file."<<endl;
+    return;
+  }
+  WriteXiCorrectionTag(out_file);
   out_file->cd("");
   for(auto& [key, hist]: hMap){
     hist->Write();
   }
   out_file->Write();
   vector<TFile*> files;
-  files.push_back(out_file);
+  out_file->Close();
   CheckAcceptance(files);
 }
