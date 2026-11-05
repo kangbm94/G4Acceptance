@@ -4,7 +4,7 @@
 #define LVtxIsXi 1
 #define SavePDF 0
 #define Recon 1
-#define CH2 1
+#define CH2 0
 #define PosShift 1
 #include "G4XiAcceptance.hh"
 gErrorIgnoreLevel = kWarning;

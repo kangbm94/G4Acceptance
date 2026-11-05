@@ -42,9 +42,20 @@ double GFltarget_distcut = 25.;
 double ltarget_distcut = 25.;
 double GFltarget_ycut = 20.;
 
-bool XiPOfflineFlag(g4genfitcarbon* XiEv){
-  if(XiEv->XiPflag and XiEv->XipVtxDist < 5) 
-    return true;
+bool XiPOfflineFlag(g4genfitcarbon* gf){
+  if(gf->XiPflag ){
+    TVector3 p_scat(gf->XipVtxScatPMom_x, gf->XipVtxScatPMom_y, gf->XipVtxScatPMom_z);
+    TVector3 xi(gf->KFXiProductionVtx_x, gf->KFXiProductionVtx_y, gf->KFXiProductionVtx_z);
+    double cth = (p_scat.Unit())*(xi.Unit());
+    double XipDist = gf->XipVtxDist;
+    double XipTgtDist = gf->XipScatpVtxDist;
+    if(cth> 0.5 and XipDist < 5) return true;
+    if(cth < 0.5){
+      if(abs(XipTgtDist-XipDist)<2) return false;
+      else return true;
+    }
+
+  }
   return false;
 }
 

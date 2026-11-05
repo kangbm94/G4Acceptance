@@ -4,7 +4,8 @@
 #define TrigB 0
 #define Recon 1
 #define CH2 1
-#define date 260817
+#define date 261105
+#define date_map 261105
 #define PosShift 1
 #define SecondaryCorr 0
 #define DrawResSmeared 1
@@ -65,28 +66,30 @@ void G4XiAcceptanceCheck(){
 }
 
 TFile* OpenXiAcceptanceFile(){
-#if CH2
+  TString fout_name = Form("%s_ReconP0_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),date_map);
   TFile* acpt_file = nullptr;
-  #if LVtxIsXi
-    #if date >= 260817
-      acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260817));
-    #else
-      acpt_file = TFile::Open(Form("./Maps/CH2_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260729));
-    #endif
-  #else
-    acpt_file = TFile::Open(Form("./Maps/%s_ReconPE42_%s%s_6mmShifted_%d.root",Target.Data(), LVtxConf.Data(),WAcc.Data(),260617));
-  #endif
-#else
-  TFile* acpt_file = nullptr;
-  #if date < 260806
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260726));
-  #elif date >= 260817
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260817));
-  #else
-    acpt_file = TFile::Open(Form("./Maps/Carbon_ReconP0__LVtxIsXi_WB_6mmShifted_%d.root",260806));
-  #endif
-#endif
+  acpt_file = TFile::Open(Form("./Maps/%s",fout_name.Data()));
   return acpt_file;
+}
+
+void DetachXiCorrectionObjects(TFile* file){
+  if(file == nullptr) return;
+  // Keep objects still referenced by the global maps after closing this input.
+  for(auto hist:hMap){
+    if(hist.second != nullptr and hist.second->GetDirectory() == file) hist.second->SetDirectory(nullptr);
+  }
+  for(auto hist:hMap2D){
+    if(hist.second != nullptr and hist.second->GetDirectory() == file) hist.second->SetDirectory(nullptr);
+  }
+  for(auto eff:effMap){
+    if(eff.second != nullptr and eff.second->GetDirectory() == file) eff.second->SetDirectory(nullptr);
+  }
+}
+void CloseXiCorrectionInput(TFile* file){
+  if(file == nullptr) return;
+  DetachXiCorrectionObjects(file);
+  file->Close();
+  delete file;
 }
 
 void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
@@ -101,12 +104,15 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
 #endif
   if(FileCheck(file_dir+filename) == 0){
     cout<<"File "<<filename<<" not found. Exiting..."<<endl;
+    delete tree;
     return;
   }
   cout<<"Accpt file"<<endl;
   TFile* acpt_file = OpenXiAcceptanceFile();
   if(acpt_file == nullptr or acpt_file->IsZombie()){
     cout<<"Error: Cannot open the Xi acceptance map file."<<endl;
+    delete acpt_file;
+    delete tree;
     return;
   }
   cout<<Form("Run %d, Target: %s, Date: %d", i,tgt.Data(), date)<<endl;
@@ -137,6 +143,10 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
   TFile* out_file = TFile::Open(Form("%sCorrectedHistograms_%d_%d_%d.root", bufdir.Data(), i, frac, ndiv), "RECREATE");
   if(out_file == nullptr or out_file->IsZombie()){
     cout<<"Error: Cannot create the Xi correction output file."<<endl;
+    delete out_file;
+    DetachXiCorrectionObjects(tree->GetCurrentFile());
+    tree->Reset();
+    CloseXiCorrectionInput(acpt_file);
     return;
   }
   WriteXiCorrectionTag(out_file);
@@ -146,6 +156,10 @@ void G4XiAcceptanceCheck(int i, int frac = 1, int ndiv = 1){
   }
   out_file->Write();
   out_file->Close();
+  delete out_file;
+  DetachXiCorrectionObjects(tree->GetCurrentFile());
+  tree->Reset();
+  CloseXiCorrectionInput(acpt_file);
 
 }
 void CheckAcceptance(vector<TFile*> files){
@@ -175,6 +189,7 @@ void CheckAcceptance(vector<TFile*> files){
   TFile* out_file = TFile::Open(figdir_base + "CorrectionResults.root", "RECREATE");
   if(out_file == nullptr or out_file->IsZombie()){
     cout<<"Error: Cannot create the Xi correction output file."<<endl;
+    delete out_file;
     return;
   }
   WriteXiCorrectionTag(out_file);
@@ -657,6 +672,7 @@ void CheckAcceptance(vector<TFile*> files){
   }
   out_file->Write();
   out_file->Close();
+  delete out_file;
   figdir_base = figdir_base_saved;
 }
 void CheckAcceptanceAll(){
@@ -668,13 +684,23 @@ void CheckAcceptanceAll(){
     nfile = 1;
     runs = 1;
   }
-  vector<TFile*> files;
+  hMap.clear();
+  histogram_file_error = false;
   for(int i=0;i<nfile;++i){
     for(int frac = 1; frac <= runs; ++frac){
       TFile* file = TFile::Open(Form("%sCorrectedHistograms_%d_%d_%d.root", bufdir.Data(), i, frac, ndiv));
-      files.push_back(file);
+      LoadCorrectionHistograms(file, tgt);
+      if(file != nullptr){
+        file->Close();
+        delete file;
+      }
     }
   }
+  if(histogram_file_error){
+    cout<<"Error: Incomplete Xi correction input. Existing correction output was not overwritten."<<endl;
+    return;
+  }
+  vector<TFile*> files;
   CheckAcceptance(files);
 }
 void G4XiAcceptanceCheckAll(){
@@ -710,12 +736,15 @@ void G4XiAcceptanceCheckAll(){
   }
   if(file_check == 0){
     cout<<"Error loading files. Exiting..."<<endl;
+    delete tree;
     return;
   }
   cout<<"Accpt file"<<endl;
   TFile* acpt_file = OpenXiAcceptanceFile();
   if(acpt_file == nullptr or acpt_file->IsZombie()){
     cout<<"Error: Cannot open the Xi acceptance map file."<<endl;
+    delete acpt_file;
+    delete tree;
     return;
   }
   cout<<Form("Run Target: %s, Date: %d", tgt.Data(), date)<<endl;
@@ -760,6 +789,10 @@ void G4XiAcceptanceCheckAll(){
   TFile* out_file = TFile::Open(bufdir + "rootfiles/AcceptanceCorrectionMaps.root", "RECREATE");
   if(out_file == nullptr or out_file->IsZombie()){
     cout<<"Error: Cannot create the Xi correction output file."<<endl;
+    delete out_file;
+    DetachXiCorrectionObjects(tree->GetCurrentFile());
+    tree->Reset();
+    CloseXiCorrectionInput(acpt_file);
     return;
   }
   WriteXiCorrectionTag(out_file);
@@ -770,5 +803,9 @@ void G4XiAcceptanceCheckAll(){
   out_file->Write();
   vector<TFile*> files;
   out_file->Close();
+  delete out_file;
   CheckAcceptance(files);
+  DetachXiCorrectionObjects(tree->GetCurrentFile());
+  tree->Reset();
+  CloseXiCorrectionInput(acpt_file);
 }
