@@ -1,6 +1,6 @@
 #define LooseBin 0
 #define Debug 0
-#define date 260817
+#define date 261105
 #define LVtxIsXi 1
 #define SavePDF 0
 #define Recon 1
@@ -106,6 +106,8 @@ void G4MakeEfficiencies(vector<TString> files){
   for(auto f:files){
     TFile* file = new TFile(f);
     LoadHistograms(file);
+    file->Close();
+    delete file;
   }
   if(histogram_file_error){
     cout<<"Error: Incomplete Xi histogram input. Existing map output was not overwritten."<<endl;
@@ -127,6 +129,7 @@ void G4MakeEfficiencies(vector<TString> files){
   fileOut->Write();
   cout<<"All done. Closing file."<<endl;
   fileOut->Close();
+  delete fileOut;
 }
 void G4MakeEfficiencies(){
   if(fout_dir == "") G4XiAcceptance();
@@ -137,18 +140,20 @@ void G4MakeEfficiencies(){
   gSystem->mkdir(buf,1);
   TString file_parallel = fout_name;
   int nfile = 30;
-  int ndiv = 1;
-  vector<TFile*> files;
+  int ndiv = 5;
+  vector<TString> files;
   for(int i=0;i<nfile;++i){
     for(int frac = 1; frac <= ndiv; ++frac){
       file_parallel = fout_name;
       file_parallel.ReplaceAll(".root",Form("_%d_%d_%d.root",i,frac,ndiv));
-      TFile* file = new TFile(buf+file_parallel);
-      files.push_back(file);
+      files.push_back(buf+file_parallel);
     }
   }
   for(auto f:files){
-    LoadHistograms(f);
+    TFile* file = new TFile(f);
+    LoadHistograms(file);
+    file->Close();
+    delete file;
   }
   if(histogram_file_error){
     cout<<"Error: Incomplete Xi histogram input. Existing map output was not overwritten."<<endl;
@@ -170,6 +175,7 @@ void G4MakeEfficiencies(){
   fileOut->Write();
   cout<<"All done. Closing file."<<endl;
   fileOut->Close();
+  delete fileOut;
 }
 void G4XiAcceptanceAll(){
 //  double pxi = -0.3;
