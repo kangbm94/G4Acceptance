@@ -530,6 +530,7 @@ public:
         return Entry(data_, key);
     }
 
+    void clear() { data_.clear(); }
 
     typename Storage::iterator begin() { return data_.begin(); }
     typename Storage::iterator end()   { return data_.end(); }
